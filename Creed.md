@@ -182,6 +182,274 @@ type GraphEdge = {
 
 #### RawMemory
 
+##### `operateRaw`
+对RawMemory进行数据操作，支持文本编辑和摘要管理。
+
+请求：
+```ts
+{
+  "action": "operateRaw",
+  "info": {
+    "name": string,
+    "operation": {
+      "type": "write"|"append"|"replace"|"insert"|"delete",
+      // write/append
+      "data"?: string,
+      // replace
+      "lineBeg"?: int,
+      "lineEnd"?: int,
+      "pattern"?: string,
+      "text"?: string,
+      // insert
+      "line"?: int,
+      "text"?: string,
+      // delete
+      "lineBeg"?: int,
+      "posBeg"?: int,
+      "lineEnd"?: int,
+      "posEnd"?: int,
+    }
+  }
+}
+```
+
+响应：
+```ts
+{}
+```
+
+##### `manageSummary`
+管理RawMemory的摘要信息。
+
+请求：
+```ts
+{
+  "action": "manageSummary",
+  "info": {
+    "name": string,
+    "operation": {
+      "type": "add"|"delete",
+      "lineStart": int,
+      "lineEnd": int,
+      "text": string, // 仅add时需要
+    }
+  }
+}
+```
+
+响应：
+```ts
+{}
+```
+
+##### `queryRaw`
+查询RawMemory的内容，支持原始数据读取和智能检索。
+
+请求：
+```ts
+{
+  "action": "queryRaw",
+  "info": {
+    "name": string,
+    "query": {
+      "type": "readData"|"searchLines"|"read",
+      // readData
+      "lineBeg"?: int,
+      "lineEnd"?: int,
+      // searchLines
+      "pattern"?: string,
+      "nSimilars"?: int,
+      // read
+      "lineStart"?: int,
+      "lineEnd"?: int,
+    }
+  }
+}
+```
+
+响应：
+```ts
+{
+  // readData
+  "data"?: string,
+  // searchLines
+  "lines"?: []{
+    "lineStart": int,
+    "lineEnd": int,
+    "score": double,
+  },
+  // read
+  "data"?: string,
+  "summaries"?: []{
+    "lineStart": int,
+    "lineEnd": int,
+    "text": string,
+  },
+  "happyToSum"?: boolean,
+}
+```
+
+#### ListMemory
+
+##### `operateList`
+对ListMemory进行列表操作，支持元素的增删改查。
+
+请求：
+```ts
+{
+  "action": "operateList",
+  "info": {
+    "name": string,
+    "operation": {
+      "type": "append"|"dequePushFront"|"dequePushBack"|"stackPush"|"insertAt"|"removeAt"|"clear",
+      "index"?: int, // insertAt/removeAt时需要
+      "mem"?: { // append/insertAt时需要
+        "name": string,
+        "data": string,
+        "description": string,
+      }
+    }
+  }
+}
+```
+
+响应：
+```ts
+{}
+```
+
+##### `searchList`
+搜索ListMemory中的元素。
+
+请求：
+```ts
+{
+  "action": "searchList",
+  "info": {
+    "name": string,
+    "query": {
+      "pattern"?: string,
+      "nSimilars"?: int,
+    },
+    "page"?: int,
+  }
+}
+```
+
+响应：
+```ts
+{
+  "queryId": string,
+  "items": []{
+    "index": int,
+    "mem": RawMemory,
+    "score"?: double,
+  },
+  "page": int,
+  "hasNext": boolean,
+}
+```
+
+##### `searchListContinue`
+继续ListMemory搜索。
+
+请求：
+```ts
+{
+  "action": "searchListContinue",
+  "info": {
+    "name": string,
+    "queryId": string,
+    "page": int,
+  }
+}
+```
+
+响应：
+```ts
+{
+  "queryId": string,
+  "items": []{
+    "index": int,
+    "mem": RawMemory,
+    "score"?: double,
+  },
+  "page": int,
+  "hasNext": boolean,
+}
+```
+
+##### `operateListElement`
+操作ListMemory中指定位置的元素。
+
+请求：
+```ts
+{
+  "action": "operateListElement",
+  "info": {
+    "name": string,
+    "which": {
+      "type": "index"|"role",
+      "index"?: int,
+      "role"?: "dequeFront"|"dequeBack"|"stackTop",
+    }
+    "operation": {
+      "type": "write"|"append"|"replace"|"insert"|"delete",
+      // 对应RawMemory的operate操作参数
+    }
+  }
+}
+```
+
+响应：
+```ts
+{}
+```
+
+##### `queryListElement`
+查询ListMemory中指定位置的元素。
+
+请求：
+```ts
+{
+  "action": "queryListElement",
+  "info": {
+    "name": string,
+    "index": int,
+    "query": {
+      "type": "readData"|"searchLines"|"read",
+      // 对应RawMemory的query操作参数
+    }
+  }
+}
+```
+
+响应：
+```ts
+{
+  // 对应RawMemory的query响应格式
+}
+```
+
+#### GraphMemory
+
+暂时搁置，不要管。
+
+
+## 典型用例
+### 1. 存储原文数据
+用户写了一篇小说，这篇小说将必须以原文形式(Raw)存储，且今后可以有不同的扩写版本。
+
+### 2. 利用列表，队列或栈理顺思路
+a) 列表可以作为Plan List，保存工作进展
+b) JSX代码中存在无法解析的格式问题，高度怀疑是标签嵌套或闭合问题，这时可以使用栈结构(Stack)逐个标签进行存储和弹出，最终判断出错位置和原因。可避免过长上下文带来的混淆和幻觉问题。
+c) 用户指定了一个文件，想要查找它引用的所有文件及其引用，这时可以使用队列结构(Deque)或栈结构完成临时记忆，以免跳转次数过多导致过长上下文。
+
+### 3. 基于知识图谱的关系网分析
+以例1中的小说为例，其情节、人物关系均可构成知识图谱关系网，以便于LLM厘清文章脉络和结构。
+
+
+
 >>>--- 以下是辅助参考资料，不包含于本文档中
 
 2.1. addMem, delMem, searchMem: 存储块，由ID唯一标识。每个存储块都有Type（Raw/Deque/Stack/VectorSpace）字段，ID字段，以及description字段
@@ -281,15 +549,3 @@ type GraphEdge = {
 4. 这个MCP服务器由ts和node维护，应符合最佳实践。
 
 ---<<< 参考资料结束
-
-## 典型用例
-### 1. 存储原文数据
-用户写了一篇小说，这篇小说将必须以原文形式(Raw)存储，且今后可以有不同的扩写版本。
-
-### 2. 利用列表，队列或栈理顺思路
-a) 列表可以作为Plan List，保存工作进展
-b) JSX代码中存在无法解析的格式问题，高度怀疑是标签嵌套或闭合问题，这时可以使用栈结构(Stack)逐个标签进行存储和弹出，最终判断出错位置和原因。可避免过长上下文带来的混淆和幻觉问题。
-c) 用户指定了一个文件，想要查找它引用的所有文件及其引用，这时可以使用队列结构(Deque)或栈结构完成临时记忆，以免跳转次数过多导致过长上下文。
-
-### 3. 基于知识图谱的关系网分析
-以例1中的小说为例，其情节、人物关系均可构成知识图谱关系网，以便于LLM厘清文章脉络和结构。
