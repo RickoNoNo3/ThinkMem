@@ -1,0 +1,140 @@
+[
+  {
+    "action": "addMem",
+    "info": {
+      "name": "my_todo_list",
+      "type": "list",
+      "description": "My task list for today",
+      "detail": {
+        "role": "array"
+      }
+    }
+  },
+  {
+    "action": "operateList",
+    "info": {
+      "name": "my_todo_list",
+      "operation": {
+        "type": "append",
+        "mem": {
+          "name": "task1",
+          "data": "Complete the project documentation",
+          "description": "Write comprehensive README and API docs"
+        }
+      }
+    }
+  },
+  {
+    "action": "operateList",
+    "info": {
+      "name": "my_todo_list",
+      "operation": {
+        "type": "append",
+        "mem": {
+          "name": "task2",
+          "data": "Review and fix bugs",
+          "description": "Check issue tracker and fix critical bugs"
+        }
+      }
+    }
+  },
+  {
+    "action": "searchList",
+    "info": {
+      "name": "my_todo_list",
+      "query": {
+        "pattern": "documentation"
+      }
+    }
+  },
+  {
+    "action": "addMem",
+    "info": {
+      "name": "my_work_stack",
+      "type": "list",
+      "description": "Stack for managing work items",
+      "detail": {
+        "role": "stack"
+      }
+    }
+  },
+  {
+    "action": "pushTop",
+    "info": {
+      "name": "my_work_stack",
+      "mem": {
+        "name": "work1",
+        "data": "High priority task",
+        "description": "Urgent client request"
+      }
+    }
+  },
+  {
+    "action": "pushTop",
+    "info": {
+      "name": "my_work_stack",
+      "mem": {
+        "name": "work2",
+        "data": "Medium priority task",
+        "description": "Internal improvement"
+      }
+    }
+  },
+  {
+    "action": "queryTop",
+    "info": {
+      "name": "my_work_stack"
+    }
+  },
+  {
+    "action": "popTop",
+    "info": {
+      "name": "my_work_stack"
+    }
+  },
+  {
+    "action": "addMem",
+    "info": {
+      "name": "processing_queue",
+      "type": "list",
+      "description": "Queue for processing items",
+      "detail": {
+        "role": "deque"
+      }
+    }
+  },
+  {
+    "action": "pushFront",
+    "info": {
+      "name": "processing_queue",
+      "mem": {
+        "name": "urgent_item",
+        "data": "Urgent processing required",
+        "description": "High priority queue item"
+      }
+    }
+  },
+  {
+    "action": "pushBack",
+    "info": {
+      "name": "processing_queue",
+      "mem": {
+        "name": "normal_item",
+        "data": "Normal processing",
+        "description": "Regular queue item"
+      }
+    }
+  },
+  {
+    "action": "queryFront",
+    "info": {
+      "name": "processing_queue"
+    }
+  },
+  {
+    "action": "popFront",
+    "info": {
+      "name": "processing_queue"
+    }
+  }
+]

@@ -3,432 +3,510 @@
 ## 命令行参数和环境变量
 |参数|说明|
 |:--:|:--:|
-|mode|`stdin|http`, 默认`stdin`, 切换HTTP/STD模式|
+|mode|`stdio|http`, 默认`stdio`, 切换HTTP/STD模式|
 |port|默认`13809`, 切换HTTP模式下的监听端口|
 |db|默认`<USERPROFILE>/.thinkmem/current.db`，指定存储位置|
-|simMode|`levenshtein`/`cosine`, 默认`levenshtein`，指定检索时的相似度模式|
-|embUrl|默认`https://api.openai.com/v1/embeddings`，指定Embedding模型的URL|
-|embModel|默认`text-embedding-ada-002`，指定Embedding模型的名称|
-|embKey|默认`<THINK_MEM_EMB_KEY>`(从环境变量中获取), 指定Embedding模型的API Key|
 
 ## 基本概念
 ### 存储块（Memory）
 一个总的存储空间，分为`Raw`/`List`/`Graph`等多种类型
 
-JSON结构：
 ```ts
-type Memory = {
-  "name": string,
-  "type": "raw"|"list"|"graph",
-  "description": string,
+// 基础Memory类型
+interface Memory {
+  name: string;
+  type: "raw" | "list" | "graph";
+  description: string;
 }
 ```
 
 ### 无结构存储块（RawMemory）
 包含无结构原始数据（纯文本）的块。可存储若干不同粒度的总结。
 
-JSON结构：
 ```ts
-type RawMemory = {
-  Memory,
-  "data": string,
-  "summaries": []{
-    "lineStart": int,
-    "lineEnd": int,
-    "text": string,
-  },
-  "nLines": int,
-  "nWords": int,
+// RawMemory数据结构
+interface RawMemory extends Memory {
+  type: "raw";
+  data: string;
+  summaries: MemorySummary[];
+  nLines: number;
+  nChars: number;
 }
+
+interface MemorySummary {
+  lineBeg: number;
+  lineEnd: number;
+  text: string;
+}
+```
 
 ### 线性表存储块（ListMemory）
 包含若干RawMemory构成的有序列表，也可当作队列/双端队列/栈使用。
 
-JSON结构：
 ```ts
-type ListMemory = {
-  Memory,
-  "list": []RawMemory,
-  "role": "array"|"deque"|"stack",
+// ListMemory数据结构
+interface ListMemory extends Memory {
+  type: "list";
+  list: RawMemory[];
+  role: "array" | "deque" | "stack";
 }
 ```
 
 ### 图存储块（GraphMemory）
 提供图结构，可以用来表示知识图谱、网络结构，也可用来表示知识树。
 
-JSON结构：
 ```ts
-type GraphMemory = {
-  Memory,
-  "nodes": []RawMemory,
-  "edges": []GraphEdge,
-  "roleSettings": {
-    "role": "tree",
-    "root": string,
+// GraphMemory数据结构（暂时搁置）
+interface GraphMemory extends Memory {
+  type: "graph";
+  nodes: RawMemory[];
+  edges: GraphEdge[];
+  roleSettings: {
+    role: "tree";
+    root: string;
   } | {
-    "role": "graph",
-  }
+    role: "graph";
+  };
 }
 
-type GraphEdge = {
-  "from": string,
-  "to": string,
-  "description": string,
-  "weight": double,
-  "bidir": boolean,
+interface GraphEdge extends RawMemory {
+  from: string;
+  to: string;
+  weight: number;
+  bidir: boolean;
 }
+```
+
+### NamePath
+用于表示一个存储块的定位。
+对于ListMemory和GraphMemory，由于它们只能处于首层，因此NamePath只有一段，即其名称。
+而对于RawMemory，NamePath可以有多段，用`<::>`分割。
+
+若父级存储块为列表，特殊索引标记是被支持的，包含：
+```
+list_name<:index:>
+list_name<:TOP:>
+list_name<:FRONT:>
+list_name<:BACK:>
+```
+
+此时分隔符后无需再附上name。
+
+当然，也可以不使用特殊索引标记，而是用name来查询：
+```
+list_name<::>child_raw_name
+```
+
+若父级存储块为图，则必须使用特殊索引标记结合name的固定格式，包含四种：
+```
+graph_name<:ROOT:> // 仅role=tree时有效
+graph_name<:VERTEX:>vertex_raw_name
+graph_name<:EDGE:>edge_raw_name
+graph_name<:EDGE:>from_raw_name<:TO:>to_raw_name
 ```
 
 ### 功能
 由于功能复杂，本MCP服务器所有数据都通过Tools获取和发送，不含直接可读的Resources。
 
 #### Memory
-##### `addMem`
-添加一个新的存储块，对于不同类型的存储块，`detail`的内容不同。
+##### `addRawMemory`
+添加一个新的RawMemory存储块。
 
 请求：
 ```ts
-{
-  "action": "addMem",
-  "info": {
-    "name": string,
-    "type": "raw"|"list"|"graph",
-    "description": string,
-    "detail": {
-      "data": string, // 将创建对应文本的RawMemory
-    } | {
-      "role": "array"|"deque"|"stack", // 将创建空的ListMemory
-    } | {
-      "role": "tree"|"graph", // 将创建空的GraphMemory
-    }
-  },
+interface AddRawMemoryRequest {
+  name: string;
+  description: string;
+  data: string;
 }
 ```
 
-响应：
+##### `addListMemory`
+添加一个新的ListMemory存储块。
+
+请求：
 ```ts
-{}
+interface AddListMemoryRequest {
+  name: string;
+  description: string;
+  role: "array" | "deque" | "stack";
+}
 ```
 
-##### `delMem`
+##### `addGraphMemory`
+添加一个新的GraphMemory存储块。
+
+请求：
+```ts
+interface AddGraphMemoryRequest {
+  name: string;
+  description: string;
+  role: "tree" | "graph";
+}
+```
+
+##### `deleteMemory`
 删除一个存储块。
 
 请求：
 ```ts
-{
-  "action": "delMem",
-  "info": {
-    "name": string,
-  }
+interface DeleteMemoryRequest {
+  name: string;
 }
 ```
 
-响应：
-```ts
-{}
-```
-
-##### `searchMem`
+##### `searchMemory`
 列出符合筛选条件的所有存储块。
-如果有字符串筛选条件且容许模糊匹配（nSimilars不为空），则按照模糊匹配相关性排序，否则按照创建时间排序。
 
 请求：
 ```ts
-{
-  "action": "searchMem",
-  "info": {
-    "query": undefined | {
-      "name": undefined | string,
-      "type": undefined | "raw"|"list"|"graph",
-      "description": undefined | string,
-      "nSimilars": undefined | int,
-    },
-    "page": undefined | int,
-  }
-}
-
-响应：
-```ts
-{
-  "queryId": string,
-  "mems": []Memory,
-  "page": int,
-  "hasNext": boolean,
-}
-```
-
-##### `searchMemContinue`
-继续列出符合筛选条件的所有存储块。
-
-请求：
-```ts
-{
-  "action": "searchMemContinue",
-  "info": {
-    "queryId": string,
-    "page": int,
-  },
+interface SearchMemoryRequest {
+  query?: {
+    pattern?: string;
+    type?: "raw" | "list" | "graph";
+  };
 }
 ```
 
 响应：
 ```ts
-{
-  "queryId": string,
-  "mems": []Memory,
-  "page": int,
-  "hasNext": boolean,
+interface SearchMemoryResponse {
+  results: Memory[];
 }
+```
 
 #### RawMemory
 
-##### `operateRaw`
-对RawMemory进行数据操作，支持文本编辑和摘要管理。
+##### `writeRaw`
+写入或追加文本内容。
 
 请求：
 ```ts
-{
-  "action": "operateRaw",
-  "info": {
-    "name": string,
-    "operation": {
-      "type": "write"|"append"|"replace"|"insert"|"delete",
-      // write/append
-      "data"?: string,
-      // replace
-      "lineBeg"?: int,
-      "lineEnd"?: int,
-      "pattern"?: string,
-      "text"?: string,
-      // insert
-      "line"?: int,
-      "text"?: string,
-      // delete
-      "lineBeg"?: int,
-      "posBeg"?: int,
-      "lineEnd"?: int,
-      "posEnd"?: int,
-    }
-  }
+interface WriteRawRequest {
+  namePath: string;
+  data: string;
+  isAppend?: boolean;
+}
+```
+
+##### `replaceRawLines`
+替换指定行范围的文本。
+
+请求：
+```ts
+interface ReplaceRawLinesRequest {
+  namePath: string;
+  lineBeg: number;
+  lineEnd: number;
+  pattern: string;
+  text: string;
+}
+```
+
+##### `deleteRawLines`
+删除指定行范围的文本。
+
+请求：
+```ts
+interface DeleteRawLinesRequest {
+  namePath: string;
+  lineBeg: number;
+  lineEnd: number;
+}
+```
+
+##### `insertRawLines`
+在指定行插入文本。
+
+请求：
+```ts
+interface InsertRawLinesRequest {
+  namePath: string;
+  lineNo: number;
+  text: string;
+}
+```
+
+##### `summarizeRawLines`
+为指定行范围添加摘要。
+
+请求：
+```ts
+interface SummarizeRawLinesRequest {
+  namePath: string;
+  lineBeg: number;
+  lineEnd: number;
+  text: string;
+}
+```
+
+##### `desummarizeRawLines`
+删除指定行范围的摘要。
+
+请求：
+```ts
+interface DesummarizeRawLinesRequest {
+  namePath: string;
+  lineBeg: number;
+  lineEnd: number;
+}
+```
+
+##### `readRawLines`
+读取RawMemory的内容，支持原始数据读取和智能检索。
+
+请求：
+```ts
+interface ReadRawLinesRequest {
+  namePath: string;
+  lineBeg?: number;
+  lineEnd?: number;
+  summarize?: boolean;
 }
 ```
 
 响应：
 ```ts
-{}
+interface ReadRawLinesResponse {
+  data?: string;
+  summaries?: MemorySummary[];
+  happyToSum?: boolean;
+}
 ```
 
-##### `manageSummary`
-管理RawMemory的摘要信息。
+##### `searchRawLines`
+搜索包含指定模式的行。
 
 请求：
 ```ts
-{
-  "action": "manageSummary",
-  "info": {
-    "name": string,
-    "operation": {
-      "type": "add"|"delete",
-      "lineStart": int,
-      "lineEnd": int,
-      "text": string, // 仅add时需要
-    }
-  }
+interface SearchRawLinesRequest {
+  namePath: string;
+  pattern: string;
 }
 ```
 
 响应：
 ```ts
-{}
-```
-
-##### `queryRaw`
-查询RawMemory的内容，支持原始数据读取和智能检索。
-
-请求：
-```ts
-{
-  "action": "queryRaw",
-  "info": {
-    "name": string,
-    "query": {
-      "type": "readData"|"searchLines"|"read",
-      // readData
-      "lineBeg"?: int,
-      "lineEnd"?: int,
-      // searchLines
-      "pattern"?: string,
-      "nSimilars"?: int,
-      // read
-      "lineStart"?: int,
-      "lineEnd"?: int,
-    }
-  }
-}
-```
-
-响应：
-```ts
-{
-  // readData
-  "data"?: string,
-  // searchLines
-  "lines"?: []{
-    "lineStart": int,
-    "lineEnd": int,
-    "score": double,
-  },
-  // read
-  "data"?: string,
-  "summaries"?: []{
-    "lineStart": int,
-    "lineEnd": int,
-    "text": string,
-  },
-  "happyToSum"?: boolean,
+interface SearchRawLinesResponse {
+  lines?: Array<{
+    lineNo: number;
+    text: string;
+  }>;
 }
 ```
 
 #### ListMemory
 
-##### `operateList`
-对ListMemory进行列表操作，支持元素的增删改查。
+##### `appendListElement`
+在列表末尾添加元素。
 
 请求：
 ```ts
-{
-  "action": "operateList",
-  "info": {
-    "name": string,
-    "operation": {
-      "type": "append"|"dequePushFront"|"dequePushBack"|"stackPush"|"insertAt"|"removeAt"|"clear",
-      "index"?: int, // insertAt/removeAt时需要
-      "mem"?: { // append/insertAt时需要
-        "name": string,
-        "data": string,
-        "description": string,
-      }
-    }
-  }
+interface AppendListElementRequest {
+  name: string;
+  data: string;
+  description: string;
+}
+```
+
+##### `pushDequeElement`
+在双端队列前端或后端添加元素。
+
+请求：
+```ts
+interface PushDequeElementRequest {
+  name: string;
+  data: string;
+  description: string;
+  position: "front" | "back";
+}
+```
+
+##### `pushStackElement`
+在栈顶添加元素。
+
+请求：
+```ts
+interface PushStackElementRequest {
+  name: string;
+  data: string;
+  description: string;
+}
+```
+
+##### `insertListElement`
+在指定位置插入元素。
+
+请求：
+```ts
+interface InsertListElementRequest {
+  name: string;
+  index: number;
+  data: string;
+  description: string;
+}
+```
+
+##### `deleteListElement`
+删除指定位置的元素。
+
+请求：
+```ts
+interface DeleteListElementRequest {
+  name: string;
+  index: number;
+}
+```
+
+##### `popDequeElement`
+从双端队列前端或后端弹出元素。
+
+请求：
+```ts
+interface PopDequeElementRequest {
+  name: string;
+  position: "front" | "back";
+}
+```
+
+##### `popStackElement`
+从栈顶弹出元素。
+
+请求：
+```ts
+interface PopStackElementRequest {
+  name: string;
+}
+```
+
+##### `clearList`
+清空列表。
+
+请求：
+```ts
+interface ClearListRequest {
+  name: string;
+}
+```
+
+##### `getListElement`
+获取指定位置的元素。
+
+请求：
+```ts
+interface GetListElementRequest {
+  name: string;
+  index: number;
 }
 ```
 
 响应：
 ```ts
-{}
+interface GetListElementResponse {
+  data?: RawMemory;
+}
 ```
 
-##### `searchList`
-搜索ListMemory中的元素。
+##### `peekDequeElement`
+查看双端队列前端或后端的元素。
 
 请求：
 ```ts
-{
-  "action": "searchList",
-  "info": {
-    "name": string,
-    "query": {
-      "pattern"?: string,
-      "nSimilars"?: int,
-    },
-    "page"?: int,
-  }
+interface PeekDequeElementRequest {
+  name: string;
+  position: "front" | "back";
+}
+```
+
+##### `peekStackElement`
+查看栈顶元素。
+
+请求：
+```ts
+interface PeekStackElementRequest {
+  name: string;
+}
+```
+
+##### `searchListElements`
+搜索列表中包含指定模式的元素。
+
+请求：
+```ts
+interface SearchListElementsRequest {
+  name: string;
+  pattern?: string;
 }
 ```
 
 响应：
 ```ts
-{
-  "queryId": string,
-  "items": []{
-    "index": int,
-    "mem": RawMemory,
-    "score"?: double,
-  },
-  "page": int,
-  "hasNext": boolean,
+interface SearchListElementsResponse {
+  results: Array<{
+    index: number;
+    data: RawMemory;
+  }>;
 }
 ```
 
-##### `searchListContinue`
-继续ListMemory搜索。
+#### 统一请求和响应类型
 
-请求：
+所有操作的请求和响应都遵循统一的接口定义：
+
+##### 基础类型
 ```ts
-{
-  "action": "searchListContinue",
-  "info": {
-    "name": string,
-    "queryId": string,
-    "page": int,
-  }
+// 操作请求类型定义
+interface BaseRequest {}
+
+interface BaseResponse {
+  success: boolean;
+  error?: string;
+  data?: any;
 }
 ```
 
-响应：
+##### 统一请求类型
 ```ts
-{
-  "queryId": string,
-  "items": []{
-    "index": int,
-    "mem": RawMemory,
-    "score"?: double,
-  },
-  "page": int,
-  "hasNext": boolean,
-}
+type MCPRequest =
+  | AddRawMemoryRequest
+  | AddListMemoryRequest
+  | AddGraphMemoryRequest
+  | DeleteMemoryRequest
+  | SearchMemoryRequest
+  | WriteRawRequest
+  | ReplaceRawLinesRequest
+  | DeleteRawLinesRequest
+  | InsertRawLinesRequest
+  | SummarizeRawLinesRequest
+  | DesummarizeRawLinesRequest
+  | ReadRawLinesRequest
+  | SearchRawLinesRequest
+  | AppendListElementRequest
+  | PushDequeElementRequest
+  | PushStackElementRequest
+  | InsertListElementRequest
+  | DeleteListElementRequest
+  | PopDequeElementRequest
+  | PopStackElementRequest
+  | ClearListRequest
+  | GetListElementRequest
+  | PeekDequeElementRequest
+  | PeekStackElementRequest
+  | SearchListElementsRequest;
 ```
 
-##### `operateListElement`
-操作ListMemory中指定位置的元素。
-
-请求：
+##### 统一响应类型
 ```ts
-{
-  "action": "operateListElement",
-  "info": {
-    "name": string,
-    "which": {
-      "type": "index"|"role",
-      "index"?: int,
-      "role"?: "dequeFront"|"dequeBack"|"stackTop",
-    }
-    "operation": {
-      "type": "write"|"append"|"replace"|"insert"|"delete",
-      // 对应RawMemory的operate操作参数
-    }
-  }
-}
-```
-
-响应：
-```ts
-{}
-```
-
-##### `queryListElement`
-查询ListMemory中指定位置的元素。
-
-请求：
-```ts
-{
-  "action": "queryListElement",
-  "info": {
-    "name": string,
-    "index": int,
-    "query": {
-      "type": "readData"|"searchLines"|"read",
-      // 对应RawMemory的query操作参数
-    }
-  }
-}
-```
-
-响应：
-```ts
-{
-  // 对应RawMemory的query响应格式
-}
+type MCPResponse = BaseResponse & {
+  data?:
+    | SearchMemoryResponse
+    | ReadRawLinesResponse
+    | SearchRawLinesResponse
+    | GetListElementResponse
+    | SearchRawLinesResponse
+    | RawMemory
+    | any;
+};
 ```
 
 #### GraphMemory
@@ -450,19 +528,19 @@ c) 用户指定了一个文件，想要查找它引用的所有文件及其引�
 
 
 
->>>--- 以下是辅助参考资料，不包含于本文档中
+>>>--- 以下是旧版辅助参考资料，不包含于本文档中
 
 2.1. addMem, delMem, searchMem: 存储块，由ID唯一标识。每个存储块都有Type（Raw/Deque/Stack/VectorSpace）字段，ID字段，以及description字段
 
 2.2. 对于Raw存储块，data字段支持的方法仅有两个：operate()和query(), 分别由详细参数决定具体行为。
 对于operate操作，支持的详细参数有：
 - write, append两种简单操作，以及replace(lineBeg, lineEnd, pattern, text), insert(line, text), delete(lineBeg, posBeg, lineEnd, posEnd)三种复杂操作。line均从0计数，且双侧闭合，即包含lineBeg和lineEnd。
-- 对于summary，支持的方法有：addSummary(lineStart, lineEnd, text), delSummary(lineStart, lineEnd)
+- 对于summary，支持的方法有：addSummary(lineBeg, lineEnd, text), delSummary(lineBeg, lineEnd)
 - 一旦data中某一line被修改，nLines和nWords都会被更新，包含该line的summary将被自动删除。
 对于query操作，支持的详细参数有：
 - readData(lineBeg, lineEnd)，最简单的方法，返回lineBeg到lineEnd之间的原始文本
 - searchLines()，同样是模糊搜索，返回nSimilars个最有可能包含相关内容的行区间（即`[]{lineBeg, lineEnd, score}`）
-- 综合data和summary，有智能读取方法：read(lineStart, lineEnd)。若有重叠区间的所有summary将所有的行全部覆盖了，则仅返回这些summary，否则将额外返回lineStart到lineEnd之间的文本。read方法还将返回一个boolean字段`happyToSum`，代表本MCP服务器根据自身的启发式算法判断，是否推荐在该区间中添加新的summary（其实实现上很简单，只要不是全覆盖，且行数超过20，就推荐）。
+- 综合data和summary，有智能读取方法：read(lineBeg, lineEnd)。若有重叠区间的所有summary将所有的行全部覆盖了，则仅返回这些summary，否则将额外返回lineBeg到lineEnd之间的文本。read方法还将返回一个boolean字段`happyToSum`，代表本MCP服务器根据自身的启发式算法判断，是否推荐在该区间中添加新的summary（其实实现上很简单，只要不是全覆盖，且行数超过20，就推荐）。
 
 示例：
 查询一个小说中与林黛玉有关的部分，非模糊匹配
@@ -481,11 +559,11 @@ c) 用户指定了一个文件，想要查找它引用的所有文件及其引�
 ```ts
 {
   "lines": []{
-    "lineStart": 3,
+    "lineBeg": 3,
     "lineEnd": 3,
     "score": 1.0,
   }, {
-    "lineStart": 8,
+    "lineBeg": 8,
     "lineEnd": 8,
     "score": 1.0,
   }
@@ -500,7 +578,7 @@ c) 用户指定了一个文件，想要查找它引用的所有文件及其引�
   "action": "query",
   "data": {
     "wantTo": "read",
-    "lineStart": 3,
+    "lineBeg": 3,
     "lineEnd": 3,
   }
 }
