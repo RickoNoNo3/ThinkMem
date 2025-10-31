@@ -43,13 +43,12 @@ describe('JsonStorage Basic Tests', () => {
   });
 
   describe('File System Operations', () => {
-    test('should create database file on initialization', () => {
+    test('should create database file on initialization', async () => {
       const storage = new JsonStorage(testDbPath);
 
       // File should be created automatically
-      setTimeout(() => {
-        expect(fs.existsSync(testDbPath)).toBe(true);
-      }, 500);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      expect(fs.existsSync(testDbPath)).toBe(true);
     });
 
     test('should handle invalid paths', () => {
@@ -101,20 +100,6 @@ describe('JsonStorage Basic Tests', () => {
           expect(memory.data).toBeDefined();
         }).not.toThrow();
       });
-    });
-  });
-
-  describe('Locking Mechanism', () => {
-    test('should use proper-lockfile for locking', () => {
-      // This test verifies that the storage is designed to use proper-lockfile
-      // The actual locking behavior is tested by the library itself
-      const storage = new JsonStorage(testDbPath);
-
-      expect(storage).toBeDefined();
-
-      // Storage should have locking mechanism
-      expect(typeof (storage as any).acquireLock).toBe('function');
-      expect(typeof (storage as any).releaseLock).toBe('function');
     });
   });
 

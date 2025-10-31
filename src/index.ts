@@ -39,13 +39,11 @@ program
 
         // 优雅关闭处理
         process.on('SIGINT', async () => {
-          console.log('\nShutting down HTTP server...');
           await httpServer.stop();
           process.exit(0);
         });
 
         process.on('SIGTERM', async () => {
-          console.log('\nShutting down HTTP server...');
           await httpServer.stop();
           process.exit(0);
         });
@@ -53,7 +51,6 @@ program
         throw new ConfigError(`Invalid mode: ${options.mode}. Must be 'stdio' or 'http'`);
       }
     } catch (error) {
-      console.error('Server startup failed:', error);
       process.exit(1);
     }
   });
@@ -94,12 +91,10 @@ function validateConfig(options: any): void {
 
 // 处理未捕获的异常
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   process.exit(1);
 });
 
@@ -108,7 +103,6 @@ process.on('SIGINT', () => {
   if (process.argv.includes('--mode') && process.argv.includes('http')) {
     return; // HTTP模式有自己的关闭处理
   }
-  console.error('\nReceived SIGINT, shutting down gracefully...');
   process.exit(0);
 });
 
@@ -116,7 +110,6 @@ process.on('SIGTERM', () => {
   if (process.argv.includes('--mode') && process.argv.includes('http')) {
     return; // HTTP模式有自己的关闭处理
   }
-  console.error('\nReceived SIGTERM, shutting down gracefully...');
   process.exit(0);
 });
 

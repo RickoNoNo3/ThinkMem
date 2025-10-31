@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Memory, RawMemory, ListMemory } from '../types';
 import { RawMemory as RawMemoryClass } from '../memory/RawMemory';
-import * as lockfile from 'proper-lockfile';
 
 export interface DatabaseSchema {
   memories: Map<string, Memory>;
@@ -14,7 +13,6 @@ export interface DatabaseSchema {
 export class JsonStorage {
   private dbPath: string;
   private data: DatabaseSchema;
-  private isLocked: boolean = false;
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
@@ -28,65 +26,9 @@ export class JsonStorage {
   }
 
   /**
-   * 获取文件独占锁
-   */
-  private async acquireLock(): Promise<void> {
-    try {
-      // 确保锁目录存在
-      const lockDir = path.dirname(this.dbPath);
-      if (!fs.existsSync(lockDir)) {
-        fs.mkdirSync(lockDir, { recursive: true });
-      }
-
-      // 尝试获取独占锁，最多等待5秒
-      const release = await lockfile.lock(this.dbPath, {
-        retries: 10,
-        stale: 30000, // 30秒后认为锁过期
-        update: 10000, // 每10秒更新锁
-        realpath: false // 禁用realpath以避免Windows路径问题
-      });
-
-      this.isLocked = true;
-      console.log(`Database file locked: ${this.dbPath}`);
-
-      // 存储release函数以便后续释放
-      (this as any).lockRelease = release;
-    } catch (error) {
-      throw new Error(`Failed to acquire database lock: ${error}`);
-    }
-  }
-
-  /**
-   * 释放文件锁
-   */
-  private async releaseLock(): Promise<void> {
-    if (this.isLocked && (this as any).lockRelease) {
-      try {
-        await (this as any).lockRelease();
-        this.isLocked = false;
-        console.log(`Database file unlocked: ${this.dbPath}`);
-      } catch (error) {
-        console.error('Failed to release database lock:', error);
-      }
-    }
-  }
-
-  /**
-   * 检查是否已加锁
-   */
-  private checkLock(): void {
-    if (!this.isLocked) {
-      throw new Error('Database operation attempted without acquiring lock first');
-    }
-  }
-
-  /**
    * 加载数据库
    */
   private async load(): Promise<void> {
-    // 获取独占锁
-    await this.acquireLock();
-
     try {
       if (fs.existsSync(this.dbPath)) {
         const rawData = fs.readFileSync(this.dbPath, 'utf-8');
@@ -114,7 +56,6 @@ export class JsonStorage {
         await this.save();
       }
     } catch (error) {
-      console.error('Failed to load database:', error);
       // 如果加载失败，创建新数据库
       this.data = {
         memories: new Map(),
@@ -133,8 +74,6 @@ export class JsonStorage {
    * 保存数据库
    */
   private async save(): Promise<void> {
-    this.checkLock();
-
     try {
       // 确保目录存在
       const dir = path.dirname(this.dbPath);
@@ -157,7 +96,6 @@ export class JsonStorage {
 
       fs.writeFileSync(this.dbPath, JSON.stringify(jsonData, null, 2), 'utf-8');
     } catch (error) {
-      console.error('Failed to save database:', error);
       throw new Error(`Database save failed: ${error}`);
     }
   }
@@ -183,11 +121,9 @@ export class JsonStorage {
             role: data.role || 'array'
           } as ListMemory;
         default:
-          console.warn(`Unknown memory type: ${data.type}`);
           return null;
       }
     } catch (error) {
-      console.error('Failed to deserialize memory:', error);
       return null;
     }
   }
@@ -196,7 +132,6 @@ export class JsonStorage {
    * 添加Memory
    */
   async addMemory(memory: Memory): Promise<void> {
-    this.checkLock();
     this.data.memories.set(memory.name, memory);
     this.data.updatedAt = new Date().toISOString();
     await this.save();
@@ -206,7 +141,6 @@ export class JsonStorage {
    * 删除Memory
    */
   async deleteMemory(name: string): Promise<boolean> {
-    this.checkLock();
     const deleted = this.data.memories.delete(name);
     if (deleted) {
       this.data.updatedAt = new Date().toISOString();
@@ -219,7 +153,6 @@ export class JsonStorage {
    * 获取Memory
    */
   getMemory(name: string): Memory | undefined {
-    this.checkLock();
     return this.data.memories.get(name);
   }
 
@@ -227,7 +160,6 @@ export class JsonStorage {
    * 检查Memory是否存在
    */
   hasMemory(name: string): boolean {
-    this.checkLock();
     return this.data.memories.has(name);
   }
 
@@ -235,7 +167,6 @@ export class JsonStorage {
    * 更新Memory
    */
   async updateMemory(memory: Memory): Promise<void> {
-    this.checkLock();
     if (this.data.memories.has(memory.name)) {
       this.data.memories.set(memory.name, memory);
       this.data.updatedAt = new Date().toISOString();
@@ -249,7 +180,6 @@ export class JsonStorage {
    * 列出所有Memory
    */
   listMemories(): Memory[] {
-    this.checkLock();
     return Array.from(this.data.memories.values());
   }
 
@@ -257,7 +187,6 @@ export class JsonStorage {
    * 根据类型筛选Memory
    */
   listMemoriesByType(type: 'raw' | 'list' | 'graph'): Memory[] {
-    this.checkLock();
     return this.listMemories().filter(memory => memory.type === type);
   }
 
@@ -270,7 +199,6 @@ export class JsonStorage {
     description?: string;
     nSimilars?: number;
   }): Memory[] {
-    this.checkLock();
     let results = this.listMemories();
 
     // 精确匹配筛选
@@ -305,7 +233,6 @@ export class JsonStorage {
     createdAt: string;
     updatedAt: string;
   } {
-    this.checkLock();
     const memories = this.listMemories();
 
     return {
@@ -323,14 +250,12 @@ export class JsonStorage {
    * 备份数据库
    */
   async backup(backupPath?: string): Promise<string> {
-    this.checkLock();
     const finalBackupPath = backupPath || `${this.dbPath}.backup.${Date.now()}`;
 
     try {
       fs.copyFileSync(this.dbPath, finalBackupPath);
       return finalBackupPath;
     } catch (error) {
-      console.error('Failed to backup database:', error);
       throw new Error(`Database backup failed: ${error}`);
     }
   }
@@ -339,7 +264,6 @@ export class JsonStorage {
    * 从备份恢复
    */
   async restore(backupPath: string): Promise<void> {
-    this.checkLock();
     try {
       if (!fs.existsSync(backupPath)) {
         throw new Error(`Backup file not found: ${backupPath}`);
@@ -354,7 +278,6 @@ export class JsonStorage {
       // 重新加载数据
       await this.load();
     } catch (error) {
-      console.error('Failed to restore database:', error);
       throw new Error(`Database restore failed: ${error}`);
     }
   }
@@ -363,8 +286,7 @@ export class JsonStorage {
    * 关闭数据库连接
    */
   async close(): Promise<void> {
-    // JSON存储不需要关闭连接，但确保保存最新数据并释放锁
+    // JSON存储不需要关闭连接，但确保保存最新数据
     await this.save();
-    await this.releaseLock();
   }
 }

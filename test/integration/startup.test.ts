@@ -107,7 +107,7 @@ describe('Startup Integration Tests', () => {
         if (!started) {
           done(new Error('Process did not start within timeout'));
         }
-      }, 10000);
+      }, 6000);
     });
   });
 });

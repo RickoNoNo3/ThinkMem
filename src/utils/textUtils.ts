@@ -106,7 +106,6 @@ export function replaceWithPattern(text: string, pattern: string, replacement: s
     const regex = new RegExp(pattern, 'g');
     return text.replace(regex, replacement);
   } catch (error) {
-    console.error('Invalid regex pattern:', pattern);
     return text;
   }
 }

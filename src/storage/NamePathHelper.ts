@@ -30,7 +30,7 @@ export const NamePathHelper = {
         } else {
             let index = -1;
             const parsed = parseNamePath(namePath);
-            if (parsed.flags.length <= 1) {
+            if (parsed.flags.length < 1) {
                 throw new ValidationError('namePath', 'Invalid namePath format');
             }
             const parent = storage.getMemory(parsed.names[0]);

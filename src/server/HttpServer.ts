@@ -49,7 +49,6 @@ export class HttpSSEServer {
 
     // 请求日志
     this.app.use((req, res, next) => {
-      console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
       next();
     });
   }
@@ -127,7 +126,6 @@ export class HttpSSEServer {
 
     // 错误处理
     this.app.use((error: any, req: Request, res: Response, next: any) => {
-      console.error('HTTP Error:', error);
       res.status(500).json({
         error: 'Internal Server Error',
         message: error.message || 'Unknown error'
@@ -140,7 +138,6 @@ export class HttpSSEServer {
    */
   private setupSocketIO(): void {
     this.io.on('connection', (socket) => {
-      console.log(`WebSocket client connected: ${socket.id}`);
 
       socket.on('mcp_request', async (data: MCPRequest) => {
         try {
@@ -161,7 +158,6 @@ export class HttpSSEServer {
       });
 
       socket.on('disconnect', () => {
-        console.log(`WebSocket client disconnected: ${socket.id}`);
       });
 
       // 发送欢迎消息
@@ -188,7 +184,6 @@ export class HttpSSEServer {
       'Access-Control-Allow-Headers': 'Cache-Control'
     });
 
-    console.log(`SSE client connected: ${clientId}`);
 
     const connection: SSEConnection = {
       id: clientId,
@@ -208,13 +203,11 @@ export class HttpSSEServer {
 
     // 处理连接断开
     req.on('close', () => {
-      console.log(`SSE client disconnected: ${clientId}`);
       this.connections.delete(clientId);
     });
 
     // 处理错误
     res.on('error', (error) => {
-      console.error(`SSE connection error for ${clientId}:`, error);
       this.connections.delete(clientId);
     });
 
@@ -248,7 +241,6 @@ export class HttpSSEServer {
       });
 
     } catch (error) {
-      console.error('REST API Error:', error);
 
       const errorResponse = {
         success: false,
@@ -276,7 +268,6 @@ export class HttpSSEServer {
       connection.response.write(message);
       connection.lastPing = Date.now();
     } catch (error) {
-      console.error(`Failed to send SSE message to ${connection.id}:`, error);
       this.connections.delete(connection.id);
     }
   }
@@ -326,7 +317,6 @@ export class HttpSSEServer {
 
       // 清理超时连接
       deadConnections.forEach(id => {
-        console.log(`SSE connection timeout: ${id}`);
         this.connections.delete(id);
       });
     }, 15000); // 每15秒检查一次
@@ -374,11 +364,6 @@ export class HttpSSEServer {
   public async start(): Promise<void> {
     return new Promise((resolve) => {
       this.server.listen(this.port, () => {
-        console.log(`THINK-MEM HTTP SSE Server running on port ${this.port}`);
-        console.log(`SSE endpoint: http://localhost:${this.port}/sse`);
-        console.log(`WebSocket endpoint: http://localhost:${this.port}/socket.io`);
-        console.log(`REST API endpoint: http://localhost:${this.port}/api`);
-        console.log(`Health check: http://localhost:${this.port}/health`);
         resolve();
       });
     });
@@ -404,7 +389,6 @@ export class HttpSSEServer {
 
       // 关闭HTTP服务器
       this.server.close(() => {
-        console.log('HTTP SSE Server stopped');
         resolve();
       });
     });

@@ -92,7 +92,7 @@ export class ListMemory implements IListMemory {
         data
       }));
     }
-    const re = new RegExp(pattern, 'g');
+    const re = new RegExp(pattern, 'i');
     const results: Array<{
       index: number;
       data: RawMemory;

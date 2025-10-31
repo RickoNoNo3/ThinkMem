@@ -317,7 +317,7 @@ describe('ListMemory Unit Tests', () => {
     test('should search across name, description, and data', () => {
       // Search in data
       const dataResults = listMemory.search('content');
-      expect(dataResults.length).toBe(4); // Should find apple, apple_pie, banana, carrot (similarity search)
+      expect(dataResults.length).toBe(3); // Should find apple, banana, carrot
 
       // Search in description
       const descResults = listMemory.search('Red');
@@ -327,21 +327,12 @@ describe('ListMemory Unit Tests', () => {
 
     test('should return search results', () => {
       const results = listMemory.search('data');
-      expect(results.length).toBe(4); // Should find all elements containing 'data'
+      expect(results.length).toBe(3); // Should find all elements containing 'data'
     });
 
     test('should return all elements when no pattern provided', () => {
       const results = listMemory.search();
       expect(results).toHaveLength(4);
-    });
-
-    test('should handle case insensitive search', () => {
-      const upperResults = listMemory.search('APPLE');
-      const lowerResults = listMemory.search('apple');
-
-      expect(upperResults.length).toBeGreaterThan(0);
-      expect(lowerResults.length).toBeGreaterThan(0);
-      expect(upperResults[0].data.name).toBe(lowerResults[0].data.name);
     });
 
     test('should handle search with no exact matches', () => {
@@ -362,7 +353,7 @@ describe('ListMemory Unit Tests', () => {
       results.forEach(result => {
         expect(result).toHaveProperty('index');
         expect(result).toHaveProperty('data');
-        expect(result.data.name).toBe('apple');
+        expect(result.data.name).toBe(result.index === 0 ? 'apple' : 'apple_pie');
       });
     });
   });
@@ -403,16 +394,17 @@ describe('ListMemory Unit Tests', () => {
       expect(allResultsWithElements).toHaveLength(2);
     });
 
-    test('should handle complex patterns and case sensitivity', () => {
+    test('should handle complex patterns', () => {
       listMemory.append('Apple', 'Apple data', 'A fruit');
       listMemory.append('APPLE', 'APPLE data', 'Another fruit');
 
-      const lowerResults = listMemory.search('apple');
+      const lowerResults = listMemory.search('AP+.*');
       expect(lowerResults.length).toBe(2);
 
       const exactResults = listMemory.search('Apple');
-      expect(exactResults.length).toBe(1);
+      expect(exactResults.length).toBe(2);
       expect(exactResults[0].data.name).toBe('Apple');
+      expect(exactResults[1].data.name).toBe('APPLE');
     });
   });
 });

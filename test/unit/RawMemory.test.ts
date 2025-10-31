@@ -203,8 +203,15 @@ describe('RawMemory Unit Tests', () => {
       // Insert line before line 2, which should affect the summary
       rawMemory.insert(2, 'New inserted line');
 
-      // Summary below the inserted line should be removed
-      expect(rawMemory.summaries.length).toBe(1);
+      // Summary below the inserted line should be pushed down
+      // between the inserted line should be removed
+      expect(rawMemory.summaries.length).toBe(2);
+      expect(rawMemory.summaries[0].lineBeg).toBe(0);
+      expect(rawMemory.summaries[0].lineEnd).toBe(1);
+      expect(rawMemory.summaries[0].text).toBe('Summary of line 1-2');
+      expect(rawMemory.summaries[1].lineBeg).toBe(3);
+      expect(rawMemory.summaries[1].lineEnd).toBe(3);
+      expect(rawMemory.summaries[1].text).toBe('Summary of line 3');
     });
   });
 
@@ -218,14 +225,17 @@ describe('RawMemory Unit Tests', () => {
 
     test('should clean affected summaries on delete', () => {
       // Add summary covering line 2-3
+      rawMemory.addSummary(0, 0, 'Summary of line 1');
       rawMemory.addSummary(1, 2, 'Summary of line 2-3');
-      expect(rawMemory.summaries).toHaveLength(1);
+      expect(rawMemory.summaries).toHaveLength(2);
 
       // Delete content from line 2
       rawMemory.delete(1, 1);
 
       // Summary should be removed
-      expect(rawMemory.summaries.length).toBe(0);
+      expect(rawMemory.summaries.length).toBe(1);
+      expect(rawMemory.summaries[0].lineBeg).toBe(0);
+      expect(rawMemory.summaries[0].lineEnd).toBe(0);
     });
   });
 

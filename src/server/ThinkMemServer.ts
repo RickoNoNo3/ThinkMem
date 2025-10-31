@@ -171,7 +171,7 @@ export class ThinkMemServer {
           },
           {
             name: 'searchMemory',
-            description: '搜索和筛选Memory存储块，支持按名称模式匹配和按类型过滤。返回符合条件的Memory列表。',
+            description: '搜索和筛选Memory存储块，支持按名称模式匹配和按类型过滤。返回符合条件的Memory列表。默认支持不区分大小写正则表达式。可空以获取全部。',
             inputSchema: {
               type: 'object',
               properties: {
@@ -181,7 +181,7 @@ export class ThinkMemServer {
                   properties: {
                     pattern: {
                       type: 'string',
-                      description: '名称模式匹配字符串，支持部分匹配来查找Memory名称'
+                      description: '名称模式匹配字符串，支持部分匹配来查找Memory名称。可空以获取全部。'
                     },
                     type: {
                       type: 'string',
@@ -367,7 +367,7 @@ export class ThinkMemServer {
           },
           {
             name: 'searchRawLines',
-            description: '在RawMemory中搜索包含指定模式的文本行。返回匹配的行号和行内容，支持精确匹配和模糊查找。',
+            description: '在RawMemory中搜索包含指定模式的文本行。返回匹配的行号和行内容，默认支持不区分大小写正则表达式。可空以获取全部。',
             inputSchema: {
               type: 'object',
               properties: {
@@ -600,7 +600,7 @@ export class ThinkMemServer {
           },
           {
             name: 'searchListElements',
-            description: '搜索ListMemory中包含指定模式的元素。返回匹配的元素索引和内容，支持精确匹配和模糊查找。',
+            description: '搜索ListMemory中包含指定模式的元素。返回匹配的元素索引和内容，默认支持不区分大小写正则表达式。可空以获取全部。',
             inputSchema: {
               type: 'object',
               properties: {
@@ -742,7 +742,6 @@ export class ThinkMemServer {
           };
         }
 
-        console.error('Unexpected error:', error);
         throw new McpError(
           ErrorCode.InternalError,
           `Internal server error: ${error instanceof Error ? error.message : String(error)}`
@@ -861,7 +860,6 @@ export class ThinkMemServer {
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('THINK-MEM MCP server running on stdio');
   }
 
   /**

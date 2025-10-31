@@ -97,6 +97,10 @@ export class RawMemory implements IRawMemory {
   insert(line: number, text: string): void {
     this.data = insertLines(this.data, line, text);
     const lineCount = countLines(text);
+    // 插入行影响到的摘要需要清理
+    this.summaries = this.summaries.filter(summary => {
+      return !(summary.lineBeg < line && summary.lineEnd >= line);
+    });
     // 插入行后面的摘要需要调整行号
     this.summaries.forEach(summary => {
       if (summary.lineBeg >= line) {
@@ -138,9 +142,7 @@ export class RawMemory implements IRawMemory {
     }
 
     // 检查是否与现有摘要重叠
-    const hasOverlap = this.summaries.some(summary =>
-      !(summary.lineEnd < lineBeg || summary.lineBeg > lineEnd)
-    );
+    const hasOverlap = this.summaries.some(summary => summary.lineBeg <= lineBeg && summary.lineEnd >= lineEnd);
 
     if (hasOverlap) {
       throw new Error(`Summary range ${lineBeg}-${lineEnd} overlaps with existing summary`);
@@ -180,7 +182,7 @@ export class RawMemory implements IRawMemory {
    * 搜索包含关键字的行（支持正则表达式）
    */
   searchLines(pattern: string): Array<{lineNo: number, text: string}> {
-    const re = new RegExp(pattern, 'g');
+    const re = new RegExp(pattern, 'i');
     const lines = this.data.split('\n');
     const matches: Array<{lineNo: number; text: string}> = [];
     for (let i = 0; i < lines.length; i++) {
