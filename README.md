@@ -24,6 +24,11 @@ ThinkMem是一个为大型语言模型设计的记忆管理MCP服务器，提供
 1. 单机模式(stdio)，但是为每一个AI助手显式指定存储位置(db参数)
 2. 多机模式(HTTP，支持StreamableHTTP)，集中管理多个AI助手的记忆，使用默认存储位置
 
+#### 首先安装
+```bash
+npm install -g thinkmem
+```
+
 #### 用法1：单机模式+显式指定存储位置
 命令行用法（仅供调试）：
 ```bash
