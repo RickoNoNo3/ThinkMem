@@ -56,6 +56,7 @@ npx -g thinkmem --mode http --port 13809 # --db 可有可无
 ```
 
 二、给MCP Host添加AI助手：
+
 JSON：
 ```json
 {
