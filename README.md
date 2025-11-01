@@ -32,7 +32,7 @@ npm install -g thinkmem
 #### 用法1：单机模式+显式指定存储位置
 命令行用法（仅供调试）：
 ```bash
-npx -g thinkmem -- --db path/to/db.json # 强烈建议指定db，否则不同进程可能冲突
+npx -g thinkmem --db path/to/db.json # 强烈建议指定db，否则不同进程可能冲突
 ```
 
 JSON：
@@ -41,7 +41,7 @@ JSON：
   "mcpServers": {
     "ThinkMem": {
       "command": "npx",
-      "args": ["-g", "thinkmem", "--", "--db", "path/to/db.json"]
+      "args": ["-g", "thinkmem", "--db", "path/to/db.json"]
     }
   }
 }
@@ -52,7 +52,7 @@ JSON：
 
 一、启动服务器：
 ```bash
-npx -g thinkmem -- --mode http --port 13809 # --db 可有可无
+npx -g thinkmem --mode http --port 13809 # --db 可有可无
 ```
 
 二、给MCP Host添加AI助手：
