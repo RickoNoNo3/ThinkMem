@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import * as fs from 'fs';
 import { z } from 'zod';
 import { VERSION } from '../version';
+import { logger } from '../utils/logger';
 
 import { JsonStorage } from '../storage/JsonStorage';
 import { RawMemory } from '../memory/RawMemory';
@@ -31,20 +32,28 @@ export class ThinkMemServer {
   private storage: JsonStorage;
 
   constructor(dbPath: string) {
-    this.server = new McpServer(
-      {
-        name: 'thinkmem',
-        version: VERSION,
-      },
-      {
-        capabilities: {
-          tools: {},
-          prompts: {},
-        },
-      }
-    );
+    try {
+      logger.info(`Initializing ThinkMem server with database: ${dbPath}`);
 
-    this.storage = new JsonStorage(dbPath);
+      this.server = new McpServer(
+        {
+          name: 'thinkmem',
+          version: VERSION,
+        },
+        {
+          capabilities: {
+            tools: {},
+            prompts: {},
+          },
+        }
+      );
+
+      this.storage = new JsonStorage(dbPath);
+      logger.info('ThinkMem server initialized successfully');
+    } catch (error) {
+      logger.fatal('Failed to initialize ThinkMem server', error);
+      throw error;
+    }
 
     this.setupToolHandlers();
     this.setupPromptHandlers();
@@ -163,8 +172,8 @@ export class ThinkMemServer {
       },
       async ({ name, description, data, secret }) => {
         try {
-          this.validateSecret(secret);
-          const result = memoryHandlers.addMemoryHandler.addRawMemory(this.storage, { name, description, data });
+          await this.validateSecret(secret);
+          const result = await memoryHandlers.addMemoryHandler.addRawMemory(this.storage, { name, description, data });
           const output = { success: true, result };
           return {
             content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
@@ -192,7 +201,7 @@ export class ThinkMemServer {
       },
       async ({ name, description, role, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await memoryHandlers.addMemoryHandler.addListMemory(this.storage, { name, description, role });
           const output = { success: true, result };
           return {
@@ -221,7 +230,7 @@ export class ThinkMemServer {
       },
       async ({ name, description, role, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await memoryHandlers.addMemoryHandler.addGraphMemory(this.storage, { name, description, role });
           const output = { success: true, result };
           return {
@@ -248,7 +257,7 @@ export class ThinkMemServer {
       },
       async ({ name, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await memoryHandlers.deleteMemoryHandler(this.storage, { name });
           const output = { success: true, result };
           return {
@@ -278,7 +287,7 @@ export class ThinkMemServer {
       },
       async ({ query, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await memoryHandlers.searchMemoryHandler(this.storage, query ? { query } : { query: {} });
           const output = { success: true, result };
           return {
@@ -312,7 +321,7 @@ export class ThinkMemServer {
       },
       async ({ namePath, data, isAppend, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await rawMemoryHandlers.writeRawHandler(this.storage, { namePath, data, isAppend: isAppend || false });
           const output = { success: true, result };
           return {
@@ -343,7 +352,7 @@ export class ThinkMemServer {
       },
       async ({ namePath, lineBeg, lineEnd, pattern, text, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await rawMemoryHandlers.replaceRawLinesHandler(this.storage, { namePath, lineBeg, lineEnd, pattern, text });
           const output = { success: true, result };
           return {
@@ -372,7 +381,7 @@ export class ThinkMemServer {
       },
       async ({ namePath, lineBeg, lineEnd, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await rawMemoryHandlers.deleteRawLinesHandler(this.storage, { namePath, lineBeg, lineEnd });
           const output = { success: true, result };
           return {
@@ -401,7 +410,7 @@ export class ThinkMemServer {
       },
       async ({ namePath, lineNo, text, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await rawMemoryHandlers.insertRawLinesHandler(this.storage, { namePath, lineNo, text });
           const output = { success: true, result };
           return {
@@ -431,7 +440,7 @@ export class ThinkMemServer {
       },
       async ({ namePath, lineBeg, lineEnd, text, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await rawMemoryHandlers.summarizeRawLinesHandler(this.storage, { namePath, lineBeg, lineEnd, text });
           const output = { success: true, result };
           return {
@@ -460,7 +469,7 @@ export class ThinkMemServer {
       },
       async ({ namePath, lineBeg, lineEnd, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await rawMemoryHandlers.desummarizeRawLinesHandler(this.storage, { namePath, lineBeg, lineEnd });
           const output = { success: true, result };
           return {
@@ -490,7 +499,7 @@ export class ThinkMemServer {
       },
       async ({ namePath, lineBeg, lineEnd, summarize, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await rawMemoryHandlers.readRawLinesHandler(this.storage, { namePath, lineBeg, lineEnd, summarize: summarize || false });
           const output = { success: true, result };
           return {
@@ -518,7 +527,7 @@ export class ThinkMemServer {
       },
       async ({ namePath, pattern, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await rawMemoryHandlers.searchRawLinesHandler(this.storage, { namePath, pattern });
           const output = { success: true, result };
           return {
@@ -553,7 +562,7 @@ export class ThinkMemServer {
       },
       async ({ name, child_name, data, description, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await listMemoryHandlers.appendListElementHandler(this.storage, { name, child_name, data, description });
           const output = { success: true, result };
           return {
@@ -584,7 +593,7 @@ export class ThinkMemServer {
       },
       async ({ name, child_name, data, description, position, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await listMemoryHandlers.pushDequeElementHandler(this.storage, { name, child_name, data, description, position });
           const output = { success: true, result };
           return {
@@ -614,7 +623,7 @@ export class ThinkMemServer {
       },
       async ({ name, child_name, data, description, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await listMemoryHandlers.pushStackElementHandler(this.storage, { name, child_name, data, description });
           const output = { success: true, result };
           return {
@@ -645,7 +654,7 @@ export class ThinkMemServer {
       },
       async ({ name, child_name, index, data, description, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await listMemoryHandlers.insertListElementHandler(this.storage, { name, child_name, index, data, description });
           const output = { success: true, result };
           return {
@@ -673,7 +682,7 @@ export class ThinkMemServer {
       },
       async ({ name, index, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await listMemoryHandlers.deleteListElementHandler(this.storage, { name, index });
           const output = { success: true, result };
           return {
@@ -701,7 +710,7 @@ export class ThinkMemServer {
       },
       async ({ name, child_name, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await listMemoryHandlers.deleteListElementByNameHandler(this.storage, { name, child_name });
           const output = { success: true, result };
           return {
@@ -729,7 +738,7 @@ export class ThinkMemServer {
       },
       async ({ name, position, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await listMemoryHandlers.popDequeElementHandler(this.storage, { name, position });
           const output = { success: true, result };
           return {
@@ -756,7 +765,7 @@ export class ThinkMemServer {
       },
       async ({ name, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await listMemoryHandlers.popStackElementHandler(this.storage, { name });
           const output = { success: true, result };
           return {
@@ -783,7 +792,7 @@ export class ThinkMemServer {
       },
       async ({ name, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await listMemoryHandlers.clearListHandler(this.storage, { name });
           const output = { success: true, result };
           return {
@@ -811,7 +820,7 @@ export class ThinkMemServer {
       },
       async ({ name, index, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await listMemoryHandlers.getListElementHandler(this.storage, { name, index });
           const output = { success: true, result };
           return {
@@ -839,7 +848,7 @@ export class ThinkMemServer {
       },
       async ({ name, position, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await listMemoryHandlers.peekDequeElementHandler(this.storage, { name, position });
           const output = { success: true, result };
           return {
@@ -866,7 +875,7 @@ export class ThinkMemServer {
       },
       async ({ name, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await listMemoryHandlers.peekStackElementHandler(this.storage, { name });
           const output = { success: true, result };
           return {
@@ -894,7 +903,7 @@ export class ThinkMemServer {
       },
       async ({ name, pattern, secret }) => {
         try {
-          this.validateSecret(secret);
+          await this.validateSecret(secret);
           const result = await listMemoryHandlers.searchListElementsHandler(this.storage, { name, pattern });
           const output = { success: true, result };
           return {
@@ -909,7 +918,13 @@ export class ThinkMemServer {
   }
 
   private handleError(error: unknown): { content: Array<{ type: 'text'; text: string }>; isError?: boolean } {
+    // 记录所有错误到 stderr
     if (error instanceof ThinkMemError) {
+      logger.error(`ThinkMem Error [${error.code}]: ${error.message}`, {
+        code: error.code,
+        details: error.details
+      });
+
       return {
         content: [
           {
@@ -926,13 +941,22 @@ export class ThinkMemServer {
       };
     }
 
+    // 记录未知错误
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    logger.error('Unknown error occurred', {
+      message: errorMessage,
+      stack: errorStack
+    });
+
     return {
       content: [
         {
           type: 'text' as const,
           text: JSON.stringify({
             success: false,
-            error: error instanceof Error ? error.message : String(error)
+            error: errorMessage
           }, null, 2)
         }
       ],
@@ -944,22 +968,41 @@ export class ThinkMemServer {
    * 启动服务器（stdio模式）
    */
   async run(): Promise<void> {
-    const transport = new StdioServerTransport();
-    await this.connect(transport);
+    try {
+      logger.info('Starting ThinkMem server in stdio mode');
+      const transport = new StdioServerTransport();
+      await this.connect(transport);
+      logger.info('ThinkMem server started successfully');
+    } catch (error) {
+      logger.fatal('Failed to start ThinkMem server', error);
+      throw error;
+    }
   }
 
   /**
    * 内核McpServer连接到Transport，暴露用于express
    */
   async connect(transport: Transport): Promise<void> {
-    await this.server.connect(transport);
+    try {
+      await this.server.connect(transport);
+    } catch (error) {
+      logger.error('Failed to connect to transport', error);
+      throw error;
+    }
   }
 
   /**
    * 关闭服务器
    */
   async close(): Promise<void> {
-    await this.storage.close();
+    try {
+      logger.info('Closing ThinkMem server');
+      await this.storage.close();
+      logger.info('ThinkMem server closed successfully');
+    } catch (error) {
+      logger.error('Error closing ThinkMem server', error);
+      throw error;
+    }
   }
 
 

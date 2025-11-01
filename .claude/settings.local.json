@@ -22,7 +22,21 @@
       "mcp__ThinkMem__addListMemory",
       "mcp__ThinkMem__writeRaw",
       "mcp__ThinkMem__appendListElement",
-      "mcp__ThinkMem__searchListElements"
+      "mcp__ThinkMem__searchListElements",
+      "mcp__ThinkMem__addRawMemory",
+      "mcp__ThinkMem__serverStatus",
+      "mcp__ThinkMem__readRawLines",
+      "mcp__ThinkMem__insertListElement",
+      "mcp__ThinkMem__getListElement",
+      "mcp__ThinkMem__searchRawLines",
+      "mcp__ThinkMem__summarizeRawLines",
+      "mcp__ThinkMem__pushDequeElement",
+      "mcp__ThinkMem__pushStackElement",
+      "mcp__ThinkMem__peekStackElement",
+      "mcp__ThinkMem__deleteMemory",
+      "Bash(git pull:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

@@ -3,6 +3,7 @@ import * as path from 'path';
 import { Memory, RawMemory, ListMemory } from '../types';
 import { RawMemory as RawMemoryClass } from '../memory/RawMemory';
 import { VERSION } from '../version';
+import { logger } from '../utils/logger';
 
 export interface DatabaseSchema {
   memories: Map<string, Memory>;
@@ -21,18 +22,22 @@ export class JsonStorage {
   private data: DatabaseSchema;
 
   constructor(dbPath: string) {
-    this.dbPath = dbPath;
-    this.data = {
-      memories: new Map(),
-      secrets: new Map(),
-      version: VERSION,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
     try {
+      logger.debug(`Initializing JsonStorage with database: ${dbPath}`);
+
+      this.dbPath = dbPath;
+      this.data = {
+        memories: new Map(),
+        secrets: new Map(),
+        version: VERSION,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
       this.load();
+      logger.debug('JsonStorage initialized successfully');
     } catch (error) {
+      logger.error('Failed to initialize JsonStorage', error);
       throw error;
     }
   }
@@ -107,9 +112,12 @@ export class JsonStorage {
    */
   private async save(): Promise<void> {
     try {
+      logger.debug('Saving database to file');
+
       // 确保目录存在
       const dir = path.dirname(this.dbPath);
       if (!fs.existsSync(dir)) {
+        logger.debug(`Creating directory: ${dir}`);
         fs.mkdirSync(dir, { recursive: true });
       }
 
@@ -138,7 +146,9 @@ export class JsonStorage {
       };
 
       fs.writeFileSync(this.dbPath, JSON.stringify(jsonData, null, 2), 'utf-8');
+      logger.debug('Database saved successfully');
     } catch (error) {
+      logger.error('Database save failed', error);
       throw new Error(`Database save failed: ${error}`);
     }
   }
