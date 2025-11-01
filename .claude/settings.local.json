@@ -44,7 +44,8 @@
       "Read(//c/Users/rick/.claude/**)",
       "Bash(npm view:*)",
       "Bash(npm cache clean:*)",
-      "Bash(thinkmem --help:*)"
+      "Bash(thinkmem --help:*)",
+      "Bash(/mcp)"
     ],
     "deny": [],
     "ask": []
