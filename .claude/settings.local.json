@@ -40,7 +40,11 @@
       "Bash(npm version:*)",
       "Bash(git push)",
       "Bash(git push:*)",
-      "Bash(npm publish)"
+      "Bash(npm publish)",
+      "Read(//c/Users/rick/.claude/**)",
+      "Bash(npm view:*)",
+      "Bash(npm cache clean:*)",
+      "Bash(thinkmem --help:*)"
     ],
     "deny": [],
     "ask": []
