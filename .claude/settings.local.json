@@ -36,7 +36,9 @@
       "mcp__ThinkMem__deleteMemory",
       "Bash(git pull:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm version:*)",
+      "Bash(git push)"
     ],
     "deny": [],
     "ask": []
