@@ -49,6 +49,10 @@ export class ThinkMemServer {
       );
 
       this.storage = new JsonStorage(dbPath);
+
+      // 运行时自检 - 检查关键文件
+      this.performRuntimeSelfCheck();
+
       logger.info('ThinkMem server initialized successfully');
     } catch (error) {
       logger.fatal('Failed to initialize ThinkMem server', error);
@@ -57,6 +61,105 @@ export class ThinkMemServer {
 
     this.setupToolHandlers();
     this.setupPromptHandlers();
+  }
+
+  /**
+   * 运行时自检 - 检查关键文件和配置
+   */
+  private performRuntimeSelfCheck(): void {
+    logger.info('Performing runtime self-check...');
+
+    const fs = require('fs');
+    const path = require('path');
+
+    // 尝试多个可能的指南文件路径
+    const possiblePaths = this.getGuideFilePaths();
+    let foundPath = null;
+
+    for (const guidePath of possiblePaths) {
+      if (fs.existsSync(guidePath)) {
+        foundPath = guidePath;
+        break;
+      }
+    }
+
+    if (!foundPath) {
+      logger.warn('⚠️  CRITICAL WARNING: LLM_PROMPT_TEMPLATE.md file not found!', {
+        searchedPaths: possiblePaths,
+        impact: 'AI助手将无法获取完整的操作指南，系统功能受限',
+        recommendation: '请确保LLM_PROMPT_TEMPLATE.md文件存在于ThinkMem安装目录'
+      });
+
+      // 输出更明显的警告信息
+      console.error('\n' + '='.repeat(80));
+      console.error('⚠️  THINK-MEM 运行时警告');
+      console.error('='.repeat(80));
+      console.error('检测到关键文件缺失: LLM_PROMPT_TEMPLATE.md');
+      console.error('此文件包含AI助手使用ThinkMem系统的完整指南。');
+      console.error('文件缺失将导致以下问题:');
+      console.error('  • AI助手无法获取系统操作说明');
+      console.error('  • ThinkMemAIGuide工具返回错误信息');
+      console.error('  • 用户无法正常使用记忆管理功能');
+      console.error('');
+      console.error('搜索过的路径:');
+      possiblePaths.forEach((p, i) => {
+        console.error(`  ${i + 1}. ${p}`);
+      });
+      console.error('');
+      console.error('解决方案:');
+      console.error('  1. 从ThinkMem安装目录中找到该文件');
+      console.error('  2. 从项目模板或备份中恢复该文件');
+      console.error('  3. 重新安装ThinkMem系统');
+      console.error('  4. 确保从正确的目录运行ThinkMem');
+      console.error('='.repeat(80) + '\n');
+    } else {
+      logger.info(`✓ LLM_PROMPT_TEMPLATE.md file found at ${foundPath}`);
+    }
+
+    logger.info('Runtime self-check completed');
+  }
+
+  /**
+   * 获取可能的指南文件路径列表
+   */
+  private getGuideFilePaths(): string[] {
+    const path = require('path');
+
+    // 获取当前脚本所在的目录（ThinkMem安装目录）
+    const scriptDir = __dirname;
+    const packageDir = path.dirname(scriptDir);
+    const projectRoot = path.dirname(packageDir);
+
+    return [
+      // 1. 当前工作目录（开发模式）
+      path.join(process.cwd(), 'LLM_PROMPT_TEMPLATE.md'),
+
+      // 2. 脚本所在的项目根目录（打包后的运行模式）
+      path.join(projectRoot, 'LLM_PROMPT_TEMPLATE.md'),
+
+      // 3. package.json所在目录（npm安装模式）
+      path.join(packageDir, 'LLM_PROMPT_TEMPLATE.md'),
+
+      // 4. 全局安装路径（如果可以通过require.resolve找到）
+      this.getGlobalPackagePath(),
+
+      // 5. 用户目录下的.thinkmem（自定义配置）
+      path.join(require('os').homedir(), '.thinkmem', 'LLM_PROMPT_TEMPLATE.md')
+    ].filter(p => p); // 过滤掉null值
+  }
+
+  /**
+   * 获取全局安装包的路径
+   */
+  private getGlobalPackagePath(): string | null {
+    try {
+      const path = require('path');
+      // 尝试找到thinkmem包的实际路径
+      const packagePath = require.resolve('thinkmem/package.json');
+      return path.join(path.dirname(packagePath), 'LLM_PROMPT_TEMPLATE.md');
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -1039,15 +1142,28 @@ export class ThinkMemServer {
       const fs = await import('fs');
       const path = await import('path');
 
-      // 读取LLM提示词模板文件
-      const guidePath = path.join(process.cwd(), 'LLM_PROMPT_TEMPLATE.md');
+      // 尝试从多个可能路径读取指南文件
+      const possiblePaths = this.getGuideFilePaths();
       let fullGuide = '';
+      let foundPath = null;
 
-      try {
-        fullGuide = fs.readFileSync(guidePath, 'utf-8');
-      } catch (error) {
-        // 如果文件不存在，返回基础指南
-        fullGuide = "ThinkMem文档不完整，请勿使用ThinkMem。请联系系统管理员补全LLM_PROMPT_TEMPLATE.md文件。";
+      for (const guidePath of possiblePaths) {
+        try {
+          if (fs.existsSync(guidePath)) {
+            fullGuide = fs.readFileSync(guidePath, 'utf-8');
+            foundPath = guidePath;
+            break;
+          }
+        } catch (error) {
+          // 继续尝试下一个路径
+          continue;
+        }
+      }
+
+      if (!foundPath) {
+        // 如果所有路径都找不到文件，返回错误信息
+        fullGuide = "ThinkMem文档不完整，请勿使用ThinkMem。请联系系统管理员补全LLM_PROMPT_TEMPLATE.md文件。\n\n搜索过的路径:\n" +
+                    possiblePaths.map((p, i) => `${i + 1}. ${p}`).join('\n');
       }
 
       // 个性化助手名称
