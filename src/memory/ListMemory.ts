@@ -7,12 +7,38 @@ export class ListMemory implements IListMemory {
   public description: string;
   public list: RawMemory[];
   public role: "array" | "deque" | "stack";
+  private nameMap: Map<string, RawMemory>;
 
   constructor(name: string, description: string, role: "array" | "deque" | "stack" = "array") {
     this.name = name;
     this.description = description;
     this.list = [];
     this.role = role;
+    this.nameMap = new Map();
+  }
+
+  /**
+   * 检查name是否已存在
+   */
+  private isNameExists(name: string): boolean {
+    return this.nameMap.has(name);
+  }
+
+  /**
+   * 添加RawMemory到nameMap
+   */
+  private addToNameMap(memory: RawMemory): void {
+    if (this.isNameExists(memory.name)) {
+      throw new Error(`RawMemory with name '${memory.name}' already exists in ListMemory '${this.name}'`);
+    }
+    this.nameMap.set(memory.name, memory);
+  }
+
+  /**
+   * 从nameMap移除RawMemory
+   */
+  private removeFromNameMap(name: string): void {
+    this.nameMap.delete(name);
   }
 
   /**
@@ -20,6 +46,7 @@ export class ListMemory implements IListMemory {
    */
   append(name: string, data: string, description?: string): void {
     const mem = new RawMemory(name, description || `Element ${this.list.length}`, data);
+    this.addToNameMap(mem);
     this.list.push(mem);
   }
 
@@ -32,6 +59,7 @@ export class ListMemory implements IListMemory {
     }
 
     const mem = new RawMemory(name, description || `Element ${index}`, data);
+    this.addToNameMap(mem);
     this.list.splice(index, 0, mem);
   }
 
@@ -44,6 +72,7 @@ export class ListMemory implements IListMemory {
     }
 
     const removed = this.list.splice(index, 1)[0];
+    this.removeFromNameMap(removed.name);
     return removed;
   }
 
@@ -52,6 +81,7 @@ export class ListMemory implements IListMemory {
    */
   clear(): void {
     this.list = [];
+    this.nameMap.clear();
   }
 
   /**
@@ -79,6 +109,33 @@ export class ListMemory implements IListMemory {
   }
 
   /**
+   * 设置指定位置的元素
+   */
+  setAt(index: number, memory: RawMemory): void {
+    if (index < 0 || index >= this.list.length) {
+      throw new Error(`Index ${index} out of bounds for list of length ${this.list.length}`);
+    }
+
+    // Check name uniqueness
+    if (memory.name !== this.list[index].name && this.isNameExists(memory.name)) {
+      throw new Error(`RawMemory with name '${memory.name}' already exists in ListMemory '${this.name}'`);
+    }
+
+    // Remove old name from map and add new name
+    this.removeFromNameMap(this.list[index].name);
+    this.addToNameMap(memory);
+
+    this.list[index] = memory;
+  }
+
+  /**
+   * 根据名称获取RawMemory
+   */
+  getByName(name: string): RawMemory | undefined {
+    return this.nameMap.get(name);
+  }
+
+  /**
    * 搜索列表中的元素（支持正则表达式）
    */
   search(pattern?: string): Array<{
@@ -98,7 +155,7 @@ export class ListMemory implements IListMemory {
       data: RawMemory;
     }> = [];
     for (let i = 0; i < this.list.length; i++) {
-      if (re.test(this.list[i].name + "\n" + this.list[i].description + "\n" + this.list[i].data)) {
+      if (re.test(this.list[i].name + "\n" + this.list[i].description)) {
         results.push({
           index: i,
           data: this.list[i]
@@ -119,6 +176,7 @@ export class ListMemory implements IListMemory {
     }
 
     const mem = new RawMemory(name, description || `Front element`, data);
+    this.addToNameMap(mem);
     this.list.unshift(mem);
   }
 
@@ -145,7 +203,9 @@ export class ListMemory implements IListMemory {
       throw new Error('Cannot pop from empty deque');
     }
 
-    return this.list.shift()!;
+    const removed = this.list.shift()!;
+    this.removeFromNameMap(removed.name);
+    return removed;
   }
 
   /**
@@ -160,7 +220,9 @@ export class ListMemory implements IListMemory {
       throw new Error('Cannot pop from empty deque');
     }
 
-    return this.list.pop()!;
+    const removed = this.list.pop()!;
+    this.removeFromNameMap(removed.name);
+    return removed;
   }
 
   /**
@@ -196,6 +258,7 @@ export class ListMemory implements IListMemory {
     }
 
     const mem = new RawMemory(name, description || `Top element`, data);
+    this.addToNameMap(mem);
     this.list.push(mem);
   }
 
@@ -211,7 +274,9 @@ export class ListMemory implements IListMemory {
       throw new Error('Cannot pop from empty stack');
     }
 
-    return this.list.pop()!;
+    const removed = this.list.pop()!;
+    this.removeFromNameMap(removed.name);
+    return removed;
   }
 
   /**
@@ -246,6 +311,12 @@ export class ListMemory implements IListMemory {
   static fromJSON(data: IListMemory): ListMemory {
     const listMemory = new ListMemory(data.name, data.description, data.role);
     listMemory.list = (data.list || []).map((item: any) => RawMemory.fromJSON(item));
+
+    // 重建nameMap
+    listMemory.list.forEach(memory => {
+      listMemory.nameMap.set(memory.name, memory);
+    });
+
     return listMemory;
   }
 }

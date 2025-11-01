@@ -8,7 +8,10 @@ import { ListMemory } from '../../../memory/ListMemory';
 import { RawMemory } from '../../../memory/RawMemory';
 import {
   PopDequeElementRequest,
-  MCPResponse
+  PopDequeElementResponse,
+  MCPResponse,
+  ListMemoryMetadata,
+  RawMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -59,14 +62,26 @@ export async function popDequeElementHandler(
   // 更新存储
   await storage.updateMemory(listMemory);
 
+  // 添加ListMemory和RawMemory元数据，与searchMemory保持一致
+  const listMetadata: ListMemoryMetadata = {
+    length: listMemory.length,
+    role: listMemory.role
+  };
+
+  const rawMetadata: RawMemoryMetadata = {
+    nLines: poppedElement.nLines,
+    nChars: poppedElement.nChars
+  };
+
+  const responseData: PopDequeElementResponse = {
+    message: `Element popped from ${position} of deque '${name}' successfully`,
+    position,
+    poppedElement: poppedElement.toSmartJSON(),
+    poppedElementMetadata: rawMetadata,
+    metadata: listMetadata
+  };
   return {
     success: true,
-    data: {
-      message: `Element popped from ${position} of deque '${name}' successfully`,
-      position,
-      poppedElement: poppedElement.toSmartJSON(),
-      listLength: listMemory.length,
-      role: listMemory.role
-    }
+    data: responseData
   };
 }

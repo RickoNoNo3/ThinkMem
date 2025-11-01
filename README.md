@@ -15,9 +15,8 @@ THINK-MEM是一个为大型语言模型设计的内存管理系统，提供多�
 - 🧠 **多种内存类型**: RawMemory（无结构文本）、ListMemory（数组/队列/栈）
 - 🔍 **智能检索**: 文本搜索和行级操作
 - 📝 **摘要管理**: 自动摘要生成和管理
-- 🔄 **双重模式**: MCP stdio模式 + HTTP/SSE实时模式
+- 🔄 **双重模式**: MCP stdio模式 + StreamableHTTP模式
 - 💾 **持久化存储**: JSON文件存储，支持备份恢复
-- 🌐 **Web API**: RESTful API + WebSocket + SSE
 - 🧪 **完整测试**: 单元测试 + 集成测试
 
 ### 基本使用
@@ -65,7 +64,7 @@ npm run dev
 
 ## 🏃‍♂️ 运行模式
 
-### 📡 Stdio模式（MCP协议）
+### 📡 Stdio模式
 
 **适用于**: AI助手集成、本地开发、MCP生态系统
 
@@ -90,7 +89,7 @@ npm run dev
 - ❌ 不支持Web界面
 - ❌ 单客户端
 
-### 🌐 HTTP模式（Web API）
+### 🌐 HTTP模式（StreamableHTTP）
 
 **适用于**: Web应用、移动应用、多客户端、实时功能
 
@@ -105,20 +104,13 @@ npm start -- --mode http --port 3000
 npm start -- --mode http --db ./data/memory.db
 ```
 
-**特点**:
-- ✅ REST API + 实时事件
-- ✅ 多客户端并发
-- ✅ Web界面支持
-- ✅ 健康检查和统计
-- ✅ CORS支持
-
 ### 📊 模式对比
 
 | 功能 | Stdio模式 | HTTP模式 |
 |------|------------|----------|
-| **协议** | MCP stdin/stdout | HTTP/SSE/WebSocket |
+| **协议** | MCP stdin/stdout | StreamableHTTP |
 | **客户端** | 单个 | 多个并发 |
-| **实时性** | 无 | SSE + WebSocket |
+| **实时性** | 无 | StreamableHTTP |
 | **Web界面** | 无 | 支持 |
 | **复杂度** | 简单 | 需要端口配置 |
 | **性能** | 低开销 | 高开销 |
@@ -140,120 +132,112 @@ npm start -- --mode http --db ./data/memory.db
 
 ### ListMemory（列表内存）
 - **用途**: 任务列表、工作流、临时数据
-- **功能**: 有序集合管理，支持三种角色模式
+- **功能**: 有序集合管理，支持三种角色模式和名称唯一性
+
+#### 🆕 名称唯一性机制（2024年新增）
+- 每个元素都有唯一的标识符名称
+- 支持按名称快速查找和删除元素
+- 自动维护名称映射表，提供O(1)查找性能
+- 防止重复名称，确保数据完整性
+- 支持嵌套元素的高效管理
 
 #### 支持的角色类型
 
 1. **Array（数组）**: 基础列表操作
    - 添加、插入、删除元素
    - 按索引访问和修改
+   - 支持按名称查找和删除
 
 2. **Deque（双端队列）**: 先进先出/后进先出
    - 两端添加和移除元素
    - 队列和栈操作
+   - 支持按名称管理元素
 
 3. **Stack（栈）**: 后进先出
    - 压栈、弹栈、栈顶查看
    - LIFO数据管理
+   - 支持按名称管理元素
 
----
+#### 🆕 新增工具（2024年更新）
+- **deleteListElementByName**: 根据元素名称删除指定元素
+- **getByName**: 快速按名称查找元素（内部方法）
+- **nameMap维护**: 自动维护名称到元素的映射关系
+- **统一元数据**: 标准化的RawMemory和ListMemory元数据
+- **类型安全**: 完整的TypeScript类型支持
 
-## 🌐 Web API使用
+### 统一化的元数据（2024年新增）
+所有内存操作都返回标准化的元数据：
 
-### HTTP模式端点
-
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/health` | GET | 健康检查 |
-| `/info` | GET | 服务器信息 |
-| `/stats` | GET | 统计信息 |
-| `/api` | POST | MCP协议API |
-| `/sse` | GET | Server-Sent Events |
-| `/socket.io` | WebSocket | Socket.IO连接 |
-
-### REST API示例
-
-#### 添加RawMemory
-```bash
-curl -X POST http://localhost:13809/api \
-  -H "Content-Type: application/json" \
-  -d '{
-    "action": "addMem",
-    "info": {
-      "name": "my_document",
-      "type": "raw",
-      "description": "我的文档",
-      "detail": {
-        "data": "第一行内容\n第二行内容\n第三行内容"
-      }
-    }
-  }'
+#### RawMemoryMetadata
+```typescript
+interface RawMemoryMetadata {
+  nLines: number;    // 行数
+  nChars: number     // 字符数
+}
 ```
 
-#### 创建ListMemory
-```bash
-curl -X POST http://localhost:13809/api \
-  -H "Content-Type: application/json" \
-  -d '{
-    "action": "addMem",
-    "info": {
-      "name": "my_todo_list",
-      "type": "list",
-      "description": "任务列表",
-      "detail": {
-        "role": "array"
-      }
-    }
-  }'
+#### ListMemoryMetadata
+```typescript
+interface ListMemoryMetadata {
+  length: number;           // 元素数量
+  role: "array" | "deque" | "stack"  // 角色模式
+}
 ```
 
-#### 搜索内存
-```bash
-curl -X POST http://localhost:13809/api \
-  -H "Content-Type: application/json" \
-  -d '{
-    "action": "searchMem",
-    "info": {
-      "query": {
-        "pattern": "任务",
-        "type": "raw"
-      }
-    }
-  }'
+#### 统一响应格式
+```typescript
+interface BaseResponse {
+  success: boolean;           // 操作是否成功
+  data?: {
+    message: string;         // 操作消息
+    metadata: RawMemoryMetadata | ListMemoryMetadata;
+    // 其他响应数据...
+  };
+  error?: string;             // 错误信息（如有）
+}
 ```
 
-### 实时连接
+### 标准化响应类型系统（2024年新增）
 
-#### SSE连接示例
-```javascript
-const eventSource = new EventSource('http://localhost:13809/sse');
+THINK-MEM现在提供完整的TypeScript类型安全体系，包括20+个标准化响应接口：
 
-eventSource.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log('实时事件:', data);
-};
+```typescript
+// 核心响应类型
+export interface BaseResponse {
+  success: boolean;
+  error?: string;
+}
+
+export interface StandardResponse<T> extends BaseResponse {
+  data: T & {
+    message: string;
+    metadata: RawMemoryMetadata | ListMemoryMetadata;
+  };
+}
+
+// 具体操作响应类型
+export interface WriteRawResponse extends StandardResponse<{
+  operation: 'write' | 'append';
+}> { }
+
+export interface SearchMemoryResponse extends StandardResponse<{
+  results: Memory[];
+}> { }
+
+export interface ReadRawLinesResponse extends StandardResponse<{
+  data?: string;
+  summaries?: MemorySummary[];
+  happyToSum?: boolean;
+}> { }
+
+// ... 其他响应类型
 ```
 
-#### WebSocket连接示例
-```javascript
-import io from 'socket.io-client';
-
-const socket = io('http://localhost:13809');
-
-socket.emit('mcp_request', {
-  action: 'addMem',
-  info: {
-    name: 'websocket_test',
-    type: 'raw',
-    description: 'WebSocket测试',
-    detail: { data: '测试内容' }
-  }
-});
-
-socket.on('mcp_response', (data) => {
-  console.log('WebSocket响应:', data);
-});
-```
+#### 类型安全特性
+- **消除any类型**: 全项目消除`any`类型使用，增强类型约束
+- **统一Response结构**: 所有handler使用标准化Response类型和metadata
+- **编译时验证**: TypeScript严格模式确保类型安全
+- **自动补全**: IDE提供完整的类型提示和错误检查
 
 ---
 
@@ -289,18 +273,29 @@ npm test -- --testNamePattern="RawMemory"
 - ✅ HTTP服务器集成测试
 - ✅ 错误处理和边界条件测试
 - ✅ CLI命令行测试
+- ✅ 名称唯一性机制测试（2024年新增）
+- ✅ 标准化响应类型测试（2024年新增）
+- ✅ 统一化接口一致性测试（2024年新增）
+
+### 测试标准化（2024年新增）
+- **统一命名规范**: 遵循TEST_NAMING_CONVENTIONS.md标准
+- **标准化模板**: 所有测试文件使用统一的describe和test结构
+- **完整覆盖**: 139个核心测试用例，覆盖所有主要功能
+- **集成测试**: 包含持久化、并发和错误处理的完整测试套件
 
 ### 项目结构
 ```
 thinkmem/
 ├── src/                    # 源代码
-│   ├── types/              # TypeScript类型定义
-│   ├── memory/             # 内存管理实现
+│   ├── types/              # TypeScript类型定义（统一化完成）
+│   ├── memory/             # 内存管理实现（名称唯一性机制）
 │   ├── storage/            # 持久化存储
-│   ├── server/             # 服务器实现
+│   ├── server/             # 服务器实现（25个工具标准化）
 │   └── utils/              # 工具函数
-├── test/                   # 测试文件
-├── creed.md               # 顶层设计文档
+├── test/                   # 测试文件（标准化测试结构）
+│   └── unit/               # 单元测试（139个测试用例）
+│       └── TEST_NAMING_CONVENTIONS.md  # 测试命名规范
+├── creed.md               # 顶层设计文档（统一化成果记录）
 ├── README.md              # 用户手册
 ├── CLAUDE.md              # Claude集成指南
 └── dist/                  # 编译输出
@@ -349,15 +344,25 @@ pm2 logs thinkmem
 ### ✅ 已完成
 - RawMemory完整实现（行级操作、摘要管理）
 - ListMemory完整实现（数组/队列/栈模式）
-- MCP stdio服务器（26个工具全部实现）
-- HTTP SSE服务器（REST API + WebSocket + SSE）
+- **名称唯一性机制**（2024年新增）- O(1)查找性能
+- **统一化响应类型系统**（2024年新增）- 20+个标准化接口
+- **全局字面级统一**（2024年新增）- handlers→types→server→unit→markdown
+- MCP stdio服务器（25个工具全部实现并标准化）
 - JSON文件持久化（备份恢复、并发控制）
-- 完整测试覆盖
+- 完整测试覆盖（139个测试用例）
 
 ### 🚧 规划中
 - GraphMemory（知识图谱存储）
 - 相似度搜索算法（Levenshtein/Cosine）
 - Embedding集成
+
+### 🎯 2024年统一化成果
+- **类型系统**: 消除所有`any`类型，增强TypeScript类型约束
+- **响应结构**: 统一所有handler的Response结构和metadata使用
+- **错误处理**: 89个错误抛出点全部使用标准化错误类型
+- **工具定义**: 25个MCP工具schema和描述完全标准化
+- **测试体系**: 创建标准化测试模板和命名规范
+- **文档同步**: 代码与文档保持完全一致
 
 ## 🤝 贡献指南
 
@@ -369,9 +374,12 @@ pm2 logs thinkmem
 
 ### 开发规范
 - 遵循TypeScript严格模式
-- 编写单元测试
+- 编写单元测试（遵循TEST_NAMING_CONVENTIONS.md）
 - 更新相关文档
 - 保持代码风格一致
+- **统一化要求**: 确保新代码符合全局字面级统一标准
+- **类型安全**: 使用标准化的Response类型定义
+- **元数据**: 所有操作返回标准化的metadata信息
 
 ## 📄 许可证
 

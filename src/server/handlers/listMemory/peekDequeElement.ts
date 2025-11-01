@@ -8,7 +8,10 @@ import { ListMemory } from '../../../memory/ListMemory';
 import { RawMemory } from '../../../memory/RawMemory';
 import {
   PeekDequeElementRequest,
-  MCPResponse
+  PeekDequeElementResponse,
+  MCPResponse,
+  RawMemoryMetadata,
+  ListMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -45,15 +48,23 @@ export async function peekDequeElementHandler(
 
   // 检查队列是否为空
   if (listMemory.length === 0) {
+    // 构建ListMemory元数据
+    const metadata: ListMemoryMetadata = {
+      length: listMemory.length,
+      role: listMemory.role
+    };
+
+    // 构建完整的PeekDequeElementResponse
+    const responseData: PeekDequeElementResponse = {
+      message: `Deque '${name}' is empty, no element to peek`,
+      position,
+      element: null,
+      metadata
+    };
+
     return {
       success: true,
-      data: {
-        message: `Deque '${name}' is empty, no element to peek`,
-        position,
-        element: null,
-        listLength: 0,
-        role: listMemory.role
-      }
+      data: responseData
     };
   }
 
@@ -65,14 +76,32 @@ export async function peekDequeElementHandler(
     element = listMemory.peekBack();
   }
 
+  // 添加RawMemory元数据，与searchMemory保持一致
+  let elementMetadata: RawMemoryMetadata | undefined;
+  if (element) {
+    elementMetadata = {
+      nLines: element.nLines,
+      nChars: element.nChars
+    };
+  }
+
+  // 添加ListMemory元数据
+  const metadata: ListMemoryMetadata = {
+    length: listMemory.length,
+    role: listMemory.role
+  };
+
+  // 构建完整的PeekDequeElementResponse
+  const responseData: PeekDequeElementResponse = {
+    message: `Element peeked from ${position} of deque '${name}' successfully`,
+    position,
+    element: element ? element.toSmartJSON() : null,
+    elementMetadata,
+    metadata
+  };
+
   return {
     success: true,
-    data: {
-      message: `Element peeked from ${position} of deque '${name}' successfully`,
-      position,
-      element: element ? element.toSmartJSON() : null,
-      listLength: listMemory.length,
-      role: listMemory.role
-    }
+    data: responseData
   };
 }

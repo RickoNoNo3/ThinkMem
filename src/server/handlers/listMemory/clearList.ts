@@ -7,7 +7,8 @@ import { JsonStorage } from '../../../storage/JsonStorage';
 import { ListMemory } from '../../../memory/ListMemory';
 import {
   ClearListRequest,
-  MCPResponse
+  MCPResponse,
+  ListMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError
@@ -40,13 +41,19 @@ export async function clearListHandler(
   // 更新存储
   await storage.updateMemory(listMemory);
 
+  // 添加ListMemory元数据，与searchMemory保持一致
+  const metadata: ListMemoryMetadata = {
+    length: listMemory.length,
+    role: listMemory.role
+  };
+
   return {
     success: true,
     data: {
       message: `List '${name}' cleared successfully`,
       beforeLength,
       afterLength: listMemory.length,
-      role: role
+      metadata
     }
   };
 }

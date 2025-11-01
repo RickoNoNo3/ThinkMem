@@ -7,7 +7,9 @@ import { JsonStorage } from '../../../storage/JsonStorage';
 import { RawMemory } from '../../../memory/RawMemory';
 import {
   WriteRawRequest,
-  MCPResponse
+  WriteRawResponse,
+  MCPResponse,
+  RawMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -48,13 +50,21 @@ export async function writeRawHandler(
   // 更新存储
   await setRaw(rawMemory);
 
+  // 添加RawMemory元数据，与searchMemory保持一致
+  const metadata: RawMemoryMetadata = {
+    nLines: rawMemory.nLines,
+    nChars: rawMemory.nChars
+  };
+
+  // 构建完整的WriteRawResponse
+  const responseData: WriteRawResponse = {
+    message: `Data ${isAppend ? 'appended to' : 'written to'} '${namePath}' successfully`,
+    operation: isAppend ? 'append' : 'write',
+    metadata
+  };
+
   return {
     success: true,
-    data: {
-      message: `Data ${isAppend ? 'appended to' : 'written to'} '${namePath}' successfully`,
-      operation: isAppend ? 'append' : 'write',
-      nLines: rawMemory.nLines,
-      nChars: rawMemory.nChars
-    }
+    data: responseData
   };
 }

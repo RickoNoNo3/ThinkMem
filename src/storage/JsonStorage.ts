@@ -5,6 +5,11 @@ import { RawMemory as RawMemoryClass } from '../memory/RawMemory';
 
 export interface DatabaseSchema {
   memories: Map<string, Memory>;
+  secrets: Map<string, {
+    secret: string;
+    createdAt: string;
+    expiresAt: string;
+  }>;
   version: string;
   createdAt: string;
   updatedAt: string;
@@ -18,11 +23,17 @@ export class JsonStorage {
     this.dbPath = dbPath;
     this.data = {
       memories: new Map(),
+      secrets: new Map(),
       version: '1.0.0',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    this.load();
+
+    try {
+      this.load();
+    } catch (error) {
+      throw error;
+    }
   }
 
   /**
@@ -45,8 +56,27 @@ export class JsonStorage {
           });
         }
 
+        // 转换secrets对象为Map
+        const secrets = new Map<string, {
+          secret: string;
+          createdAt: string;
+          expiresAt: string;
+        }>();
+        if (jsonData.secrets) {
+          Object.entries(jsonData.secrets).forEach(([key, value]: [string, any]) => {
+            if (value.secret && value.createdAt && value.expiresAt) {
+              secrets.set(key, {
+                secret: value.secret,
+                createdAt: value.createdAt,
+                expiresAt: value.expiresAt
+              });
+            }
+          });
+        }
+
         this.data = {
           memories,
+          secrets,
           version: jsonData.version || '1.0.0',
           createdAt: jsonData.createdAt || new Date().toISOString(),
           updatedAt: jsonData.updatedAt || new Date().toISOString()
@@ -59,6 +89,7 @@ export class JsonStorage {
       // 如果加载失败，创建新数据库
       this.data = {
         memories: new Map(),
+        secrets: new Map(),
         version: '1.0.0',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -66,8 +97,8 @@ export class JsonStorage {
     }
   }
 
-  forceSave() {
-    this.save();
+  async forceSave() {
+    await this.save();
   }
 
   /**
@@ -87,8 +118,19 @@ export class JsonStorage {
         memoriesObj[key] = value;
       });
 
+      // 转换secrets Map为普通对象以便序列化
+      const secretsObj: Record<string, {
+        secret: string;
+        createdAt: string;
+        expiresAt: string;
+      }> = {};
+      this.data.secrets.forEach((value, key) => {
+        secretsObj[key] = value;
+      });
+
       const jsonData = {
         memories: memoriesObj,
+        secrets: secretsObj,
         version: this.data.version,
         createdAt: this.data.createdAt,
         updatedAt: new Date().toISOString()
@@ -132,6 +174,9 @@ export class JsonStorage {
    * 添加Memory
    */
   async addMemory(memory: Memory): Promise<void> {
+    if (this.data.memories.has(memory.name)) {
+      throw new Error(`Memory '${memory.name}' already exists`);
+    }
     this.data.memories.set(memory.name, memory);
     this.data.updatedAt = new Date().toISOString();
     await this.save();
@@ -280,6 +325,108 @@ export class JsonStorage {
     } catch (error) {
       throw new Error(`Database restore failed: ${error}`);
     }
+  }
+
+  /**
+   * 添加Secret
+   */
+  async addSecret(secretId: string, secret: string, expiresAt: string): Promise<void> {
+    if (this.data.secrets.has(secretId)) {
+      throw new Error(`Secret '${secretId}' already exists`);
+    }
+    this.data.secrets.set(secretId, {
+      secret,
+      createdAt: new Date().toISOString(),
+      expiresAt
+    });
+    this.data.updatedAt = new Date().toISOString();
+    await this.save();
+  }
+
+  /**
+   * 删除Secret
+   */
+  async deleteSecret(secretId: string): Promise<boolean> {
+    const deleted = this.data.secrets.delete(secretId);
+    if (deleted) {
+      this.data.updatedAt = new Date().toISOString();
+      await this.save();
+    }
+    return deleted;
+  }
+
+  /**
+   * 获取Secret
+   */
+  getSecret(secretId: string): { secret: string; createdAt: string; expiresAt: string } | undefined {
+    return this.data.secrets.get(secretId);
+  }
+
+  /**
+   * 检查Secret是否存在
+   */
+  hasSecret(secretId: string): boolean {
+    return this.data.secrets.has(secretId);
+  }
+
+  /**
+   * 验证Secret是否有效
+   */
+  validateSecret(secretId: string, secret: string): boolean {
+    const storedSecret = this.getSecret(secretId);
+    if (!storedSecret) {
+      return false;
+    }
+
+    // 检查是否过期
+    const now = new Date();
+    const expiresAt = new Date(storedSecret.expiresAt);
+    if (now > expiresAt) {
+      this.deleteSecret(secretId); // 删除过期的secret
+      return false;
+    }
+
+    // 检查secret是否匹配
+    return storedSecret.secret === secret;
+  }
+
+  /**
+   * 清理所有过期的Secrets
+   */
+  async cleanupExpiredSecrets(): Promise<number> {
+    const now = new Date();
+    let cleanedCount = 0;
+
+    for (const [secretId, secretData] of this.data.secrets.entries()) {
+      const expiresAt = new Date(secretData.expiresAt);
+      if (now > expiresAt) {
+        this.data.secrets.delete(secretId);
+        cleanedCount++;
+      }
+    }
+
+    if (cleanedCount > 0) {
+      this.data.updatedAt = new Date().toISOString();
+      await this.save();
+    }
+
+    return cleanedCount;
+  }
+
+  /**
+   * 获取所有Secrets（用于调试和管理）
+   */
+  listSecrets(): Array<{ id: string; secret: string; createdAt: string; expiresAt: string }> {
+    const secrets: Array<{ id: string; secret: string; createdAt: string; expiresAt: string }> = [];
+    this.data.secrets.forEach((value, key) => {
+      secrets.push({
+        id: key,
+        secret: value.secret,
+        createdAt: value.createdAt,
+        expiresAt: value.expiresAt
+      });
+    });
+    return secrets;
   }
 
   /**

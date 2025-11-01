@@ -1,68 +1,36 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ErrorCode,
-  ListToolsRequestSchema,
-  McpError,
-} from '@modelcontextprotocol/sdk/types.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import * as fs from 'fs';
+import { z } from 'zod';
 
 import { JsonStorage } from '../storage/JsonStorage';
 import { RawMemory } from '../memory/RawMemory';
 import { ListMemory } from '../memory/ListMemory';
+import { SecretManager } from '../auth/SecretManager';
 import {
   memoryHandlers,
   rawMemoryHandlers,
   listMemoryHandlers
 } from './handlers';
 import {
-  MCPRequest,
-  MCPResponse,
-  AddRawMemoryRequest,
-  AddListMemoryRequest,
-  AddGraphMemoryRequest,
-  DeleteMemoryRequest,
-  SearchMemoryRequest,
-  SearchMemoryResponse,
-  WriteRawRequest,
-  ReplaceRawLinesRequest,
-  DeleteRawLinesRequest,
-  InsertRawLinesRequest,
-  SummarizeRawLinesRequest,
-  DesummarizeRawLinesRequest,
-  ReadRawLinesRequest,
-  ReadRawLinesResponse,
-  SearchRawLinesRequest,
-  SearchRawLinesResponse,
-  AppendListElementRequest,
-  PushDequeElementRequest,
-  PushStackElementRequest,
-  InsertListElementRequest,
-  DeleteListElementRequest,
-  PopDequeElementRequest,
-  PopStackElementRequest,
-  ClearListRequest,
-  GetListElementRequest,
-  GetListElementResponse,
-  PeekDequeElementRequest,
-  PeekStackElementRequest,
-  SearchListElementsRequest,
-  SearchListElementsResponse,
-} from '../types';
-import {
   ThinkMemError,
   MemoryNotFoundError,
   MemoryAlreadyExistsError,
   InvalidOperationError,
-  ValidationError
+  ValidationError,
+  MissingSecretError,
+  InvalidSecretError
 } from '../utils/errors';
+import { Transport } from '@modelcontextprotocol/sdk/shared/transport';
+
 
 export class ThinkMemServer {
-  private server: Server;
+  private server: McpServer;
   private storage: JsonStorage;
 
   constructor(dbPath: string) {
-    this.server = new Server(
+    this.server = new McpServer(
       {
         name: 'thinkmem',
         version: '1.0.0',
@@ -70,788 +38,905 @@ export class ThinkMemServer {
       {
         capabilities: {
           tools: {},
+          prompts: {},
         },
       }
     );
 
     this.storage = new JsonStorage(dbPath);
+
     this.setupToolHandlers();
+    this.setupPromptHandlers();
   }
 
   /**
    * 设置工具处理器
    */
   private setupToolHandlers(): void {
-    // 列出可用工具
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      return {
-        tools: [
-          // Memory管理工具
-          {
-            name: 'addRawMemory',
-            description: '创建一个新的RawMemory存储块，用于存储无结构的原始文本数据。支持后续的文本编辑、摘要管理和智能搜索功能。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'Memory存储块的唯一标识符名称'
-                },
-                description: {
-                  type: 'string',
-                  description: 'Memory存储块的详细描述，用于说明存储内容的用途和特征'
-                },
-                data: {
-                  type: 'string',
-                  description: '要存储的原始文本数据内容'
-                }
-              },
-              required: ['name', 'description', 'data']
-            }
-          },
-          {
-            name: 'addListMemory',
-            description: '创建一个新的ListMemory存储块，作为有序集合使用。支持array（数组）、deque（双端队列）、stack（栈）三种角色模式。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'ListMemory存储块的唯一标识符名称'
-                },
-                description: {
-                  type: 'string',
-                  description: 'ListMemory存储块的详细描述，说明其用途和使用场景'
-                },
-                role: {
-                  type: 'string',
-                  enum: ['array', 'deque', 'stack'],
-                  description: '列表的角色模式：array为普通数组，deque为双端队列（支持前后端操作），stack为栈（支持后进先出操作）'
-                }
-              },
-              required: ['name', 'description', 'role']
-            }
-          },
-          {
-            name: 'addGraphMemory',
-            description: '创建一个新的GraphMemory存储块，用于表示图结构数据。支持tree（树结构）和graph（图结构）两种模式，适用于知识图谱、关系网络等场景。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'GraphMemory存储块的唯一标识符名称'
-                },
-                description: {
-                  type: 'string',
-                  description: 'GraphMemory存储块的详细描述，说明图的用途和结构特征'
-                },
-                role: {
-                  type: 'string',
-                  enum: ['tree', 'graph'],
-                  description: '图的角色模式：tree为树结构（有根节点的层次结构），graph为图结构（网络结构，无明确根节点）'
-                }
-              },
-              required: ['name', 'description', 'role']
-            }
-          },
-          {
-            name: 'deleteMemory',
-            description: '删除指定名称的Memory存储块及其所有数据。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: '要删除的Memory存储块的名称'
-                }
-              },
-              required: ['name']
-            }
-          },
-          {
-            name: 'searchMemory',
-            description: '搜索和筛选Memory存储块，支持按名称模式匹配和按类型过滤。返回符合条件的Memory列表。默认支持不区分大小写正则表达式。可空以获取全部。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'object',
-                  description: '搜索条件，支持模式匹配和类型过滤',
-                  properties: {
-                    pattern: {
-                      type: 'string',
-                      description: '名称模式匹配字符串，支持部分匹配来查找Memory名称。可空以获取全部。'
-                    },
-                    type: {
-                      type: 'string',
-                      enum: ['raw', 'list', 'graph'],
-                      description: '按Memory类型过滤：raw为原始文本，list为列表，graph为图结构'
-                    }
-                  }
-                }
-              }
-            }
-          },
+    this.setupSystemTools();
+    this.setupMemoryManagementTools();
+    this.setupRawMemoryTools();
+    this.setupListMemoryTools();
+  }
 
-          // RawMemory操作工具
-          {
-            name: 'writeRaw',
-            description: '向RawMemory写入文本内容，支持覆盖模式和追加模式。覆盖模式会替换全部内容，追加模式在末尾添加新内容。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                namePath: {
-                  type: 'string',
-                  description: 'RawMemory的定位路径，对于顶级RawMemory直接使用名称，对于嵌套在ListMemory中的使用 "list_name<:index:>" 或 "list_name<::>child_name" 格式'
-                },
-                data: {
-                  type: 'string',
-                  description: '要写入的文本内容'
-                },
-                isAppend: {
-                  type: 'boolean',
-                  description: '是否为追加模式。true表示在现有内容末尾另起一行追加，false表示覆盖全部内容。默认为false'
-                }
-              },
-              required: ['namePath', 'data']
-            }
-          },
-          {
-            name: 'replaceRawLines',
-            description: '替换RawMemory中指定行范围的文本内容。支持模式匹配来精确定位要替换的文本片段。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                namePath: {
-                  type: 'string',
-                  description: 'RawMemory的定位路径'
-                },
-                lineBeg: {
-                  type: 'number',
-                  description: '起始行号（从0开始计数，包含该行）'
-                },
-                lineEnd: {
-                  type: 'number',
-                  description: '结束行号（从0开始计数，包含该行）'
-                },
-                pattern: {
-                  type: 'string',
-                  description: '用于精确匹配的模式字符串，只有匹配该模式的文本才会被替换'
-                },
-                text: {
-                  type: 'string',
-                  description: '替换后的新文本内容'
-                }
-              },
-              required: ['namePath', 'lineBeg', 'lineEnd', 'pattern', 'text']
-            }
-          },
-          {
-            name: 'deleteRawLines',
-            description: '删除RawMemory中指定行范围的文本内容。删除后后面的行会自动前移。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                namePath: {
-                  type: 'string',
-                  description: 'RawMemory的定位路径'
-                },
-                lineBeg: {
-                  type: 'number',
-                  description: '起始行号（从0开始计数，包含该行）'
-                },
-                lineEnd: {
-                  type: 'number',
-                  description: '结束行号（从0开始计数，包含该行）'
-                }
-              },
-              required: ['namePath', 'lineBeg', 'lineEnd']
-            }
-          },
-          {
-            name: 'insertRawLines',
-            description: '在RawMemory的指定行位置插入新文本内容。原位置的行及后续行会自动后移。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                namePath: {
-                  type: 'string',
-                  description: 'RawMemory的定位路径'
-                },
-                lineNo: {
-                  type: 'number',
-                  description: '插入位置的行号（从0开始计数），新内容将插入到该行之前'
-                },
-                text: {
-                  type: 'string',
-                  description: '要插入的文本内容'
-                }
-              },
-              required: ['namePath', 'lineNo', 'text']
-            }
-          },
-          {
-            name: 'summarizeRawLines',
-            description: '为RawMemory的指定行范围添加摘要文本。摘要用于对大段文本进行概括性描述，便于快速理解和检索。粒度可以较细。此过程应该由工具调用方自觉主动完成。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                namePath: {
-                  type: 'string',
-                  description: 'RawMemory的定位路径'
-                },
-                lineBeg: {
-                  type: 'number',
-                  description: '摘要覆盖的起始行号（从0开始计数，包含该行）'
-                },
-                lineEnd: {
-                  type: 'number',
-                  description: '摘要覆盖的结束行号（从0开始计数，包含该行）'
-                },
-                text: {
-                  type: 'string',
-                  description: '摘要文本内容，应该简明扼要地概括对应行范围的主要信息'
-                }
-              },
-              required: ['namePath', 'lineBeg', 'lineEnd', 'text']
-            }
-          },
-          {
-            name: 'desummarizeRawLines',
-            description: '删除RawMemory指定行范围的摘要。删除摘要不会影响原始文本内容。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                namePath: {
-                  type: 'string',
-                  description: 'RawMemory的定位路径'
-                },
-                lineBeg: {
-                  type: 'number',
-                  description: '要删除摘要的起始行号（从0开始计数，包含该行）'
-                },
-                lineEnd: {
-                  type: 'number',
-                  description: '要删除摘要的结束行号（从0开始计数，包含该行）'
-                }
-              },
-              required: ['namePath', 'lineBeg', 'lineEnd']
-            }
-          },
-          {
-            name: 'readRawLines',
-            description: '读取RawMemory的文本内容，支持原始数据读取和智能摘要模式。智能模式会优先返回摘要，提高阅读效率。使用此工具即使通读全文（不指定beg和end），也不会返回RawMemory的元数据（总行数、总字符数），而searchMemory则会返回。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                namePath: {
-                  type: 'string',
-                  description: 'RawMemory的定位路径'
-                },
-                lineBeg: {
-                  type: 'number',
-                  description: '读取的起始行号（从0开始计数，包含该行），不指定则从开头读取'
-                },
-                lineEnd: {
-                  type: 'number',
-                  description: '读取的结束行号（从0开始计数，包含该行），不指定则读到结尾'
-                },
-                summarize: {
-                  type: 'boolean',
-                  description: '是否启用智能摘要模式。true模式下优先返回摘要而非原始文本，提高阅读效率。默认为false'
-                }
-              },
-              required: ['namePath']
-            }
-          },
-          {
-            name: 'searchRawLines',
-            description: '在RawMemory中搜索包含指定模式的文本行。返回匹配的行号和行内容，默认支持不区分大小写正则表达式。可空以获取全部。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                namePath: {
-                  type: 'string',
-                  description: 'RawMemory的定位路径'
-                },
-                pattern: {
-                  type: 'string',
-                  description: '要搜索的文本模式，支持部分匹配和包含关系查找'
-                }
-              },
-              required: ['namePath', 'pattern']
-            }
-          },
-
-          // ListMemory操作工具
-          {
-            name: 'appendListElement',
-            description: '在ListMemory的末尾添加新元素。适用于所有角色模式的ListMemory，但仅建议在array模式下使用。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'ListMemory存储块的名称'
-                },
-                data: {
-                  type: 'string',
-                  description: '新元素的文本数据内容'
-                },
-                description: {
-                  type: 'string',
-                  description: '新元素的描述信息，用于说明该元素的用途和内容特征'
-                }
-              },
-              required: ['name', 'data', 'description']
-            }
-          },
-          {
-            name: 'pushDequeElement',
-            description: '在双端队列模式ListMemory的前端或后端添加元素。front为前端插入，back为后端插入。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'ListMemory存储块的名称（必须为deque角色）'
-                },
-                data: {
-                  type: 'string',
-                  description: '新元素的文本数据内容'
-                },
-                description: {
-                  type: 'string',
-                  description: '新元素的描述信息'
-                },
-                position: {
-                  type: 'string',
-                  enum: ['front', 'back'],
-                  description: '插入位置：front为前端插入（队列头部），back为后端插入（队列尾部）'
-                }
-              },
-              required: ['name', 'data', 'description', 'position']
-            }
-          },
-          {
-            name: 'pushStackElement',
-            description: '在栈模式ListMemory的顶部添加新元素。遵循后进先出（LIFO）原则。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'ListMemory存储块的名称（必须为stack角色）'
-                },
-                data: {
-                  type: 'string',
-                  description: '新元素的文本数据内容'
-                },
-                description: {
-                  type: 'string',
-                  description: '新元素的描述信息'
-                }
-              },
-              required: ['name', 'data', 'description']
-            }
-          },
-          {
-            name: 'insertListElement',
-            description: '在ListMemory的指定位置插入新元素。适用于需要精确控制元素顺序的场景。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'ListMemory存储块的名称'
-                },
-                index: {
-                  type: 'number',
-                  description: '插入位置的索引（从0开始计数），新元素将插入到该位置'
-                },
-                data: {
-                  type: 'string',
-                  description: '新元素的文本数据内容'
-                },
-                description: {
-                  type: 'string',
-                  description: '新元素的描述信息'
-                }
-              },
-              required: ['name', 'index', 'data', 'description']
-            }
-          },
-          {
-            name: 'deleteListElement',
-            description: '删除ListMemory中指定位置的元素。删除后后面的元素会自动前移。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'ListMemory存储块的名称'
-                },
-                index: {
-                  type: 'number',
-                  description: '要删除元素的索引位置（从0开始计数）'
-                }
-              },
-              required: ['name', 'index']
-            }
-          },
-          {
-            name: 'popDequeElement',
-            description: '从双端队列模式ListMemory的前端或后端弹出元素。遵循先进先出（FIFO）或后进先出（LIFO）原则。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'ListMemory存储块的名称（必须为deque角色）'
-                },
-                position: {
-                  type: 'string',
-                  enum: ['front', 'back'],
-                  description: '弹出位置：front为前端弹出（队列头部，先进先出），back为后端弹出（队列尾部，后进先出）'
-                }
-              },
-              required: ['name', 'position']
-            }
-          },
-          {
-            name: 'popStackElement',
-            description: '从栈模式ListMemory的顶部弹出元素。遵循后进先出（LIFO）原则。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'ListMemory存储块的名称（必须为stack角色）'
-                }
-              },
-              required: ['name']
-            }
-          },
-          {
-            name: 'clearList',
-            description: '清空ListMemory中的所有元素。此操作不可逆，请谨慎使用。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'ListMemory存储块的名称'
-                }
-              },
-              required: ['name']
-            }
-          },
-          {
-            name: 'getListElement',
-            description: '获取ListMemory中指定位置的元素内容。不会修改列表状态，仅用于查询。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'ListMemory存储块的名称'
-                },
-                index: {
-                  type: 'number',
-                  description: '要获取元素的索引位置（从0开始计数）'
-                }
-              },
-              required: ['name', 'index']
-            }
-          },
-          {
-            name: 'peekDequeElement',
-            description: '查看双端队列模式ListMemory的前端或后端元素，但不移除。用于预览队列状态。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'ListMemory存储块的名称（必须为deque角色）'
-                },
-                position: {
-                  type: 'string',
-                  enum: ['front', 'back'],
-                  description: '查看位置：front为前端（队列头部），back为后端（队列尾部）'
-                }
-              },
-              required: ['name', 'position']
-            }
-          },
-          {
-            name: 'peekStackElement',
-            description: '查看栈模式ListMemory的顶部元素，但不移除。用于预览栈顶状态。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'ListMemory存储块的名称（必须为stack角色）'
-                }
-              },
-              required: ['name']
-            }
-          },
-          {
-            name: 'searchListElements',
-            description: '搜索ListMemory中包含指定模式的元素。返回匹配的元素索引和内容，默认支持不区分大小写正则表达式。可空以获取全部。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'ListMemory存储块的名称'
-                },
-                pattern: {
-                  type: 'string',
-                  description: '要搜索的文本模式，在元素的数据和描述中进行匹配查找'
-                }
-              },
-              required: ['name']
-            }
-          }
-        ]
-      };
-    });
-
-    // 处理工具调用
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const toolName = request.params.name;
-
-      try {
-        let result: MCPResponse;
-
-        // 根据工具名称分发到对应的处理器
-        switch (toolName) {
-          // Memory管理工具
-          case 'addRawMemory':
-            result = await this.handleAddRawMemory(request.params.arguments as unknown as AddRawMemoryRequest);
-            break;
-          case 'addListMemory':
-            result = await this.handleAddListMemory(request.params.arguments as unknown as AddListMemoryRequest);
-            break;
-          case 'addGraphMemory':
-            result = await this.handleAddGraphMemory(request.params.arguments as unknown as AddGraphMemoryRequest);
-            break;
-          case 'deleteMemory':
-            result = await this.handleDeleteMemory(request.params.arguments as unknown as DeleteMemoryRequest);
-            break;
-          case 'searchMemory':
-            result = await this.handleSearchMemory(request.params.arguments as unknown as SearchMemoryRequest);
-            break;
-
-          // RawMemory操作工具
-          case 'writeRaw':
-            result = await this.handleWriteRaw(request.params.arguments as unknown as WriteRawRequest);
-            break;
-          case 'replaceRawLines':
-            result = await this.handleReplaceRawLines(request.params.arguments as unknown as ReplaceRawLinesRequest);
-            break;
-          case 'deleteRawLines':
-            result = await this.handleDeleteRawLines(request.params.arguments as unknown as DeleteRawLinesRequest);
-            break;
-          case 'insertRawLines':
-            result = await this.handleInsertRawLines(request.params.arguments as unknown as InsertRawLinesRequest);
-            break;
-          case 'summarizeRawLines':
-            result = await this.handleSummarizeRawLines(request.params.arguments as unknown as SummarizeRawLinesRequest);
-            break;
-          case 'desummarizeRawLines':
-            result = await this.handleDesummarizeRawLines(request.params.arguments as unknown as DesummarizeRawLinesRequest);
-            break;
-          case 'readRawLines':
-            result = await this.handleReadRawLines(request.params.arguments as unknown as ReadRawLinesRequest);
-            break;
-          case 'searchRawLines':
-            result = await this.handleSearchRawLines(request.params.arguments as unknown as SearchRawLinesRequest);
-            break;
-
-          // ListMemory操作工具
-          case 'appendListElement':
-            result = await this.handleAppendListElement(request.params.arguments as unknown as AppendListElementRequest);
-            break;
-          case 'pushDequeElement':
-            result = await this.handlePushDequeElement(request.params.arguments as unknown as PushDequeElementRequest);
-            break;
-          case 'pushStackElement':
-            result = await this.handlePushStackElement(request.params.arguments as unknown as PushStackElementRequest);
-            break;
-          case 'insertListElement':
-            result = await this.handleInsertListElement(request.params.arguments as unknown as InsertListElementRequest);
-            break;
-          case 'deleteListElement':
-            result = await this.handleDeleteListElement(request.params.arguments as unknown as DeleteListElementRequest);
-            break;
-          case 'popDequeElement':
-            result = await this.handlePopDequeElement(request.params.arguments as unknown as PopDequeElementRequest);
-            break;
-          case 'popStackElement':
-            result = await this.handlePopStackElement(request.params.arguments as unknown as PopStackElementRequest);
-            break;
-          case 'clearList':
-            result = await this.handleClearList(request.params.arguments as unknown as ClearListRequest);
-            break;
-          case 'getListElement':
-            result = await this.handleGetListElement(request.params.arguments as unknown as GetListElementRequest);
-            break;
-          case 'peekDequeElement':
-            result = await this.handlePeekDequeElement(request.params.arguments as unknown as PeekDequeElementRequest);
-            break;
-          case 'peekStackElement':
-            result = await this.handlePeekStackElement(request.params.arguments as unknown as PeekStackElementRequest);
-            break;
-          case 'searchListElements':
-            result = await this.handleSearchListElements(request.params.arguments as unknown as SearchListElementsRequest);
-            break;
-
-          default:
-            throw new McpError(
-              ErrorCode.MethodNotFound,
-              `Unknown tool: ${toolName}`
-            );
-        }
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2)
-            }
-          ]
-        };
-      } catch (error) {
-        if (error instanceof ThinkMemError) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  success: false,
-                  error: error.message,
-                  code: error.code,
-                  details: error.details
-                }, null, 2)
-              }
-            ]
+  /**
+   * 系统工具
+   */
+  private setupSystemTools(): void {
+    // 服务器状态检查工具
+    this.server.registerTool(
+      'serverStatus',
+      {
+        title: 'Server Status',
+        description: '检查服务器运行状态和统计信息',
+        inputSchema: { verbose: z.boolean().optional() },
+        outputSchema: { status: z.string(), timestamp: z.string(), stats: z.any(), guide: z.string(), }
+      },
+      async ({ verbose }) => {
+        try {
+          const stats = this.getStats();
+          const output = {
+            status: 'running',
+            timestamp: new Date().toISOString(),
+            stats: verbose ? stats : {
+              totalMemories: Object.keys(stats.memories || {}).length,
+              lastModified: stats.lastModified
+            },
+            guide: 'Did you fully read `ThinkMemAIGuide`? If not, MUST read it before using or talking about it.',
           };
+
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // AI助手指南工具
+    this.server.registerTool(
+      'ThinkMemAIGuide',
+      {
+        title: 'THINK-MEM AI助手指南',
+        description: '获取完整的THINK-MEM AI助手操作指南，包含NamePath定位系统详解、实际应用范例和最佳实践。帮助AI助手快速掌握如何使用ThinkMem系统进行记忆管理和智能交互。当AI助手使用ThinkMem前务必阅读完整指南以获取secret。',
+        inputSchema: {
+          section: z.enum(['full', 'basic', 'namepath', 'examples', 'patterns']).optional().describe('指南部分：full=完整指南，basic=基础规范，namepath=NamePath详解，examples=应用范例'),
+          assistant_name: z.string().describe('助手名称，用于个性化指南内容')
+        },
+        outputSchema: {
+          success: z.boolean(),
+          content: z.string(),
+          section: z.string(),
+          assistant_name: z.string(),
+          secret: z.string().optional(),
+        }
+      },
+      async ({ section = 'full', assistant_name = 'ThinkMem测试员' }) => {
+        try {
+          const content = await this.handleAIGuideRequest(section, assistant_name);
+
+          let secret = undefined;
+        if (section === 'full') {
+          secret = SecretManager.generateSecret();
+          await SecretManager.storeSecret(this.storage, secret);
         }
 
-        throw new McpError(
-          ErrorCode.InternalError,
-          `Internal server error: ${error instanceof Error ? error.message : String(error)}`
-        );
+        const output = {
+          success: true,
+          content: content,
+          section: section,
+          assistant_name: assistant_name,
+          secret: secret,
+        };
+
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
       }
-    });
+    );
   }
 
-  
-  // Memory管理处理器
-  private async handleAddRawMemory(request: AddRawMemoryRequest): Promise<MCPResponse> {
-    return memoryHandlers.addMemoryHandler.addRawMemory(this.storage, request);
+  /**
+   * Memory 管理工具 (5个工具)
+   */
+  private setupMemoryManagementTools(): void {
+    // 创建 RawMemory
+    this.server.registerTool(
+      'addRawMemory',
+      {
+        title: 'Add Raw Memory',
+        description: '创建一个新的RawMemory存储块，用于存储无结构的原始文本数据。支持后续的文本编辑、摘要管理和智能搜索功能。',
+        inputSchema: {
+          name: z.string(),
+          description: z.string(),
+          data: z.string(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, description, data, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = memoryHandlers.addMemoryHandler.addRawMemory(this.storage, { name, description, data });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 创建 ListMemory
+    this.server.registerTool(
+      'addListMemory',
+      {
+        title: 'Add List Memory',
+        description: '创建一个新的ListMemory存储块，作为有序集合使用。支持array（数组）、deque（双端队列）、stack（栈）三种角色模式。',
+        inputSchema: {
+          name: z.string(),
+          description: z.string(),
+          role: z.enum(['array', 'deque', 'stack']),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, description, role, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await memoryHandlers.addMemoryHandler.addListMemory(this.storage, { name, description, role });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 创建 GraphMemory
+    this.server.registerTool(
+      'addGraphMemory',
+      {
+        title: 'Add Graph Memory',
+        description: '创建一个新的GraphMemory存储块，用于表示图结构数据。支持tree（树结构）和graph（图结构）两种模式，适用于知识图谱、关系网络等场景。',
+        inputSchema: {
+          name: z.string(),
+          description: z.string(),
+          role: z.enum(['tree', 'graph']),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, description, role, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await memoryHandlers.addMemoryHandler.addGraphMemory(this.storage, { name, description, role });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 删除 Memory
+    this.server.registerTool(
+      'deleteMemory',
+      {
+        title: 'Delete Memory',
+        description: '删除指定的Memory存储块及其包含的所有数据。',
+        inputSchema: {
+          name: z.string(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await memoryHandlers.deleteMemoryHandler(this.storage, { name });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 搜索 Memory
+    this.server.registerTool(
+      'searchMemory',
+      {
+        title: 'Search Memory',
+        description: '搜索和筛选Memory存储块，支持按名称模式匹配和按类型过滤。返回符合条件的Memory列表。默认支持不区分大小写正则表达式。可空以获取全部。',
+        inputSchema: {
+          query: z.object({
+            pattern: z.string().optional(),
+            type: z.enum(['raw', 'list', 'graph']).optional()
+          }).optional(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ query, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await memoryHandlers.searchMemoryHandler(this.storage, query ? { query } : { query: {} });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
   }
 
-  private async handleAddListMemory(request: AddListMemoryRequest): Promise<MCPResponse> {
-    return memoryHandlers.addMemoryHandler.addListMemory(this.storage, request);
+  /**
+   * RawMemory 操作工具 (8个工具)
+   */
+  private setupRawMemoryTools(): void {
+    // 写入 RawMemory
+    this.server.registerTool(
+      'writeRaw',
+      {
+        title: 'Write Raw',
+        description: '向RawMemory写入文本内容，支持覆盖模式或追加模式。',
+        inputSchema: {
+          namePath: z.string(),
+          data: z.string(),
+          isAppend: z.boolean().optional(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ namePath, data, isAppend, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await rawMemoryHandlers.writeRawHandler(this.storage, { namePath, data, isAppend: isAppend || false });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 替换 RawMemory 行
+    this.server.registerTool(
+      'replaceRawLines',
+      {
+        title: 'Replace Raw Lines',
+        description: '替换RawMemory中指定行范围的文本内容，支持模式匹配定位。',
+        inputSchema: {
+          namePath: z.string(),
+          lineBeg: z.number(),
+          lineEnd: z.number(),
+          pattern: z.string(),
+          text: z.string(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ namePath, lineBeg, lineEnd, pattern, text, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await rawMemoryHandlers.replaceRawLinesHandler(this.storage, { namePath, lineBeg, lineEnd, pattern, text });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 删除 RawMemory 行
+    this.server.registerTool(
+      'deleteRawLines',
+      {
+        title: 'Delete Raw Lines',
+        description: '删除RawMemory中指定行范围的文本内容，后续行会自动前移。',
+        inputSchema: {
+          namePath: z.string(),
+          lineBeg: z.number(),
+          lineEnd: z.number(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ namePath, lineBeg, lineEnd, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await rawMemoryHandlers.deleteRawLinesHandler(this.storage, { namePath, lineBeg, lineEnd });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 插入 RawMemory 行
+    this.server.registerTool(
+      'insertRawLines',
+      {
+        title: 'Insert Raw Lines',
+        description: '在RawMemory指定行位置插入新文本内容，原位置行及后续行会自动后移。',
+        inputSchema: {
+          namePath: z.string(),
+          lineNo: z.number(),
+          text: z.string(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ namePath, lineNo, text, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await rawMemoryHandlers.insertRawLinesHandler(this.storage, { namePath, lineNo, text });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 添加摘要
+    this.server.registerTool(
+      'summarizeRawLines',
+      {
+        title: 'Summarize Raw Lines',
+        description: '为RawMemory的指定行范围添加摘要文本。摘要用于对大段文本进行概括性描述，便于快速理解和检索。粒度可以较细。此过程应该由工具调用方自觉主动完成。',
+        inputSchema: {
+          namePath: z.string(),
+          lineBeg: z.number(),
+          lineEnd: z.number(),
+          text: z.string(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ namePath, lineBeg, lineEnd, text, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await rawMemoryHandlers.summarizeRawLinesHandler(this.storage, { namePath, lineBeg, lineEnd, text });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 删除摘要
+    this.server.registerTool(
+      'desummarizeRawLines',
+      {
+        title: 'Desummarize Raw Lines',
+        description: '删除RawMemory指定行范围的摘要，不影响原始文本内容。',
+        inputSchema: {
+          namePath: z.string(),
+          lineBeg: z.number(),
+          lineEnd: z.number(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ namePath, lineBeg, lineEnd, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await rawMemoryHandlers.desummarizeRawLinesHandler(this.storage, { namePath, lineBeg, lineEnd });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 读取 RawMemory 行
+    this.server.registerTool(
+      'readRawLines',
+      {
+        title: 'Read Raw Lines',
+        description: '读取RawMemory的文本内容，支持原始数据读取和智能摘要模式。',
+        inputSchema: {
+          namePath: z.string(),
+          lineBeg: z.number().optional(),
+          lineEnd: z.number().optional(),
+          summarize: z.boolean().optional(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ namePath, lineBeg, lineEnd, summarize, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await rawMemoryHandlers.readRawLinesHandler(this.storage, { namePath, lineBeg, lineEnd, summarize: summarize || false });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 搜索 RawMemory 行
+    this.server.registerTool(
+      'searchRawLines',
+      {
+        title: 'Search Raw Lines',
+        description: '在RawMemory中搜索包含指定模式的文本行。返回匹配的行号和行内容，默认支持不区分大小写正则表达式。可空以获取全部。',
+        inputSchema: {
+          namePath: z.string(),
+          pattern: z.string(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ namePath, pattern, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await rawMemoryHandlers.searchRawLinesHandler(this.storage, { namePath, pattern });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
   }
 
-  private async handleAddGraphMemory(request: AddGraphMemoryRequest): Promise<MCPResponse> {
-    return memoryHandlers.addMemoryHandler.addGraphMemory(this.storage, request);
+  /**
+   * ListMemory 操作工具 (16个工具)
+   */
+  private setupListMemoryTools(): void {
+    // 添加元素到末尾
+    this.server.registerTool(
+      'appendListElement',
+      {
+        title: 'Append List Element',
+        description: '在ListMemory的末尾添加新元素。适用于所有角色模式的ListMemory，但仅建议在array模式下使用。',
+        inputSchema: {
+          name: z.string(),
+          child_name: z.string(),
+          data: z.string(),
+          description: z.string(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, child_name, data, description, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await listMemoryHandlers.appendListElementHandler(this.storage, { name, child_name, data, description });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 双端队列推入元素
+    this.server.registerTool(
+      'pushDequeElement',
+      {
+        title: 'Push Deque Element',
+        description: '在双端队列模式ListMemory的前端或后端添加元素。',
+        inputSchema: {
+          name: z.string(),
+          child_name: z.string(),
+          data: z.string(),
+          description: z.string(),
+          position: z.enum(['front', 'back']),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, child_name, data, description, position, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await listMemoryHandlers.pushDequeElementHandler(this.storage, { name, child_name, data, description, position });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 栈推入元素
+    this.server.registerTool(
+      'pushStackElement',
+      {
+        title: 'Push Stack Element',
+        description: '在栈模式ListMemory的顶部添加新元素，遵循后进先出原则。',
+        inputSchema: {
+          name: z.string(),
+          child_name: z.string(),
+          data: z.string(),
+          description: z.string(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, child_name, data, description, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await listMemoryHandlers.pushStackElementHandler(this.storage, { name, child_name, data, description });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 插入元素到指定位置
+    this.server.registerTool(
+      'insertListElement',
+      {
+        title: 'Insert List Element',
+        description: '在ListMemory的指定位置插入新元素，用于精确控制元素顺序。',
+        inputSchema: {
+          name: z.string(),
+          child_name: z.string(),
+          index: z.number(),
+          data: z.string(),
+          description: z.string(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, child_name, index, data, description, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await listMemoryHandlers.insertListElementHandler(this.storage, { name, child_name, index, data, description });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 按索引删除元素
+    this.server.registerTool(
+      'deleteListElement',
+      {
+        title: 'Delete List Element',
+        description: '删除ListMemory中指定位置的元素，后续元素会自动前移。',
+        inputSchema: {
+          name: z.string(),
+          index: z.number(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, index, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await listMemoryHandlers.deleteListElementHandler(this.storage, { name, index });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 按名称删除元素
+    this.server.registerTool(
+      'deleteListElementByName',
+      {
+        title: 'Delete List Element By Name',
+        description: '根据元素名称删除ListMemory中的指定元素，利用名称唯一性机制定位。',
+        inputSchema: {
+          name: z.string(),
+          child_name: z.string(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, child_name, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await listMemoryHandlers.deleteListElementByNameHandler(this.storage, { name, child_name });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 双端队列弹出元素
+    this.server.registerTool(
+      'popDequeElement',
+      {
+        title: 'Pop Deque Element',
+        description: '从双端队列模式ListMemory的前端或后端弹出元素，遵循先进先出或后进先出原则。',
+        inputSchema: {
+          name: z.string(),
+          position: z.enum(['front', 'back']),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, position, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await listMemoryHandlers.popDequeElementHandler(this.storage, { name, position });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 栈弹出元素
+    this.server.registerTool(
+      'popStackElement',
+      {
+        title: 'Pop Stack Element',
+        description: '从栈模式ListMemory的顶部弹出元素，遵循后进先出原则。',
+        inputSchema: {
+          name: z.string(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await listMemoryHandlers.popStackElementHandler(this.storage, { name });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 清空列表
+    this.server.registerTool(
+      'clearList',
+      {
+        title: 'Clear List',
+        description: '清空ListMemory中的所有元素，此操作不可逆。',
+        inputSchema: {
+          name: z.string(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await listMemoryHandlers.clearListHandler(this.storage, { name });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 获取列表元素
+    this.server.registerTool(
+      'getListElement',
+      {
+        title: 'Get List Element',
+        description: '获取ListMemory中指定位置的元素内容，仅用于查询操作。',
+        inputSchema: {
+          name: z.string(),
+          index: z.number(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, index, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await listMemoryHandlers.getListElementHandler(this.storage, { name, index });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 查看双端队列元素
+    this.server.registerTool(
+      'peekDequeElement',
+      {
+        title: 'Peek Deque Element',
+        description: '查看双端队列模式ListMemory的前端或后端元素，用于预览队列状态。',
+        inputSchema: {
+          name: z.string(),
+          position: z.enum(['front', 'back']),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, position, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await listMemoryHandlers.peekDequeElementHandler(this.storage, { name, position });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 查看栈元素
+    this.server.registerTool(
+      'peekStackElement',
+      {
+        title: 'Peek Stack Element',
+        description: '查看栈模式ListMemory的顶部元素，用于预览栈顶状态。',
+        inputSchema: {
+          name: z.string(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await listMemoryHandlers.peekStackElementHandler(this.storage, { name });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
+
+    // 搜索列表元素
+    this.server.registerTool(
+      'searchListElements',
+      {
+        title: 'Search List Elements',
+        description: '搜索ListMemory中名称中包含指定模式的元素。返回匹配的元素索引和内容，默认支持不区分大小写正则表达式。可空以获取全部。',
+        inputSchema: {
+          name: z.string(),
+          pattern: z.string().optional(),
+          secret: z.string()
+        },
+        outputSchema: { success: z.boolean(), result: z.any() }
+      },
+      async ({ name, pattern, secret }) => {
+        try {
+          this.validateSecret(secret);
+          const result = await listMemoryHandlers.searchListElementsHandler(this.storage, { name, pattern });
+          const output = { success: true, result };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
+        } catch (error) {
+          return this.handleError(error);
+        }
+      }
+    );
   }
 
-  private async handleDeleteMemory(request: DeleteMemoryRequest): Promise<MCPResponse> {
-    return memoryHandlers.deleteMemoryHandler(this.storage, request);
-  }
+  private handleError(error: unknown): { content: Array<{ type: 'text'; text: string }>; isError?: boolean } {
+    if (error instanceof ThinkMemError) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({
+              success: false,
+              error: error.message,
+              code: error.code,
+              details: error.details
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
 
-  private async handleSearchMemory(request: SearchMemoryRequest): Promise<MCPResponse> {
-    return memoryHandlers.searchMemoryHandler(this.storage, request);
-  }
-
-  // RawMemory操作处理器
-  private async handleWriteRaw(request: WriteRawRequest): Promise<MCPResponse> {
-    return rawMemoryHandlers.writeRawHandler(this.storage, request);
-  }
-
-  private async handleReplaceRawLines(request: ReplaceRawLinesRequest): Promise<MCPResponse> {
-    return rawMemoryHandlers.replaceRawLinesHandler(this.storage, request);
-  }
-
-  private async handleDeleteRawLines(request: DeleteRawLinesRequest): Promise<MCPResponse> {
-    return rawMemoryHandlers.deleteRawLinesHandler(this.storage, request);
-  }
-
-  private async handleInsertRawLines(request: InsertRawLinesRequest): Promise<MCPResponse> {
-    return rawMemoryHandlers.insertRawLinesHandler(this.storage, request);
-  }
-
-  private async handleSummarizeRawLines(request: SummarizeRawLinesRequest): Promise<MCPResponse> {
-    return rawMemoryHandlers.summarizeRawLinesHandler(this.storage, request);
-  }
-
-  private async handleDesummarizeRawLines(request: DesummarizeRawLinesRequest): Promise<MCPResponse> {
-    return rawMemoryHandlers.desummarizeRawLinesHandler(this.storage, request);
-  }
-
-  private async handleReadRawLines(request: ReadRawLinesRequest): Promise<MCPResponse> {
-    return rawMemoryHandlers.readRawLinesHandler(this.storage, request);
-  }
-
-  private async handleSearchRawLines(request: SearchRawLinesRequest): Promise<MCPResponse> {
-    return rawMemoryHandlers.searchRawLinesHandler(this.storage, request);
-  }
-
-  // ListMemory操作处理器
-  private async handleAppendListElement(request: AppendListElementRequest): Promise<MCPResponse> {
-    return listMemoryHandlers.appendListElementHandler(this.storage, request);
-  }
-
-  private async handlePushDequeElement(request: PushDequeElementRequest): Promise<MCPResponse> {
-    return listMemoryHandlers.pushDequeElementHandler(this.storage, request);
-  }
-
-  private async handlePushStackElement(request: PushStackElementRequest): Promise<MCPResponse> {
-    return listMemoryHandlers.pushStackElementHandler(this.storage, request);
-  }
-
-  private async handleInsertListElement(request: InsertListElementRequest): Promise<MCPResponse> {
-    return listMemoryHandlers.insertListElementHandler(this.storage, request);
-  }
-
-  private async handleDeleteListElement(request: DeleteListElementRequest): Promise<MCPResponse> {
-    return listMemoryHandlers.deleteListElementHandler(this.storage, request);
-  }
-
-  private async handlePopDequeElement(request: PopDequeElementRequest): Promise<MCPResponse> {
-    return listMemoryHandlers.popDequeElementHandler(this.storage, request);
-  }
-
-  private async handlePopStackElement(request: PopStackElementRequest): Promise<MCPResponse> {
-    return listMemoryHandlers.popStackElementHandler(this.storage, request);
-  }
-
-  private async handleClearList(request: ClearListRequest): Promise<MCPResponse> {
-    return listMemoryHandlers.clearListHandler(this.storage, request);
-  }
-
-  private async handleGetListElement(request: GetListElementRequest): Promise<MCPResponse> {
-    return listMemoryHandlers.getListElementHandler(this.storage, request);
-  }
-
-  private async handlePeekDequeElement(request: PeekDequeElementRequest): Promise<MCPResponse> {
-    return listMemoryHandlers.peekDequeElementHandler(this.storage, request);
-  }
-
-  private async handlePeekStackElement(request: PeekStackElementRequest): Promise<MCPResponse> {
-    return listMemoryHandlers.peekStackElementHandler(this.storage, request);
-  }
-
-  private async handleSearchListElements(request: SearchListElementsRequest): Promise<MCPResponse> {
-    return listMemoryHandlers.searchListElementsHandler(this.storage, request);
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : String(error)
+          }, null, 2)
+        }
+      ],
+      isError: true
+    };
   }
 
   /**
@@ -859,6 +944,13 @@ export class ThinkMemServer {
    */
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
+    await this.connect(transport);
+  }
+
+  /**
+   * 内核McpServer连接到Transport，暴露用于express
+   */
+  async connect(transport: Transport): Promise<void> {
     await this.server.connect(transport);
   }
 
@@ -869,11 +961,134 @@ export class ThinkMemServer {
     await this.storage.close();
   }
 
-  
+
   /**
    * 获取存储统计信息
    */
   getStats(): any {
     return this.storage.getStats();
+  }
+
+  /**
+   * 从指南中提取指定章节内容
+   */
+  private extractSection(fullGuide: string, startMarker: string, endMarker: string): string {
+    const startIndex = fullGuide.indexOf(startMarker);
+    const endIndex = fullGuide.indexOf(endMarker);
+
+    if (startIndex === -1) {
+      return `未找到章节: ${startMarker}`;
+    }
+
+    if (endIndex === -1) {
+      return fullGuide.substring(startIndex);
+    }
+
+    return fullGuide.substring(startIndex, endIndex);
+  }
+
+  /**
+   * AI助手指南共享处理器
+   */
+  private async handleAIGuideRequest(section: string = 'full', assistant_name: string = 'ThinkMem测试员'): Promise<any> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+
+      // 读取LLM提示词模板文件
+      const guidePath = path.join(process.cwd(), 'LLM_PROMPT_TEMPLATE.md');
+      let fullGuide = '';
+
+      try {
+        fullGuide = fs.readFileSync(guidePath, 'utf-8');
+      } catch (error) {
+        // 如果文件不存在，返回基础指南
+        fullGuide = "ThinkMem文档不完整，请勿使用ThinkMem。请联系系统管理员补全LLM_PROMPT_TEMPLATE.md文件。";
+      }
+
+      // 个性化助手名称
+      let personalizedGuide = fullGuide.replace(/ThinkMem测试员/g, assistant_name);
+
+      // 根据请求的section返回相应内容
+      let content = '';
+      switch (section) {
+        case 'basic':
+          content = this.extractSection(personalizedGuide, '## 基础规范', '## NamePath');
+          break;
+        case 'namepath':
+          content = this.extractSection(personalizedGuide, '## NamePath 定位系统详解', '## 具体应用详解');
+          break;
+        case 'examples':
+          content = this.extractSection(personalizedGuide, '## 具体应用详解', '## 结束');
+          break;
+        case 'full':
+        default:
+          content = personalizedGuide;
+          break;
+      }
+
+      return content;
+    } catch (error) {
+      // 如果出错，返回错误信息
+      return `获取THINK-MEM AI助手指南时出错: ${error instanceof Error ? error.message : String(error)}\n\n请检查LLM_PROMPT_TEMPLATE.md文件是否存在。`;
+    }
+  }
+
+  /**
+   * 验证secret令牌
+   */
+  private async validateSecret(secret: string | undefined): Promise<void> {
+    if (!secret) {
+      throw new MissingSecretError('Missing secret token. Please read the full ThinkMemAIGuide to obtain a secret token.');
+    }
+
+    if (!SecretManager.validateSecret(secret)) {
+      throw new InvalidSecretError('Invalid secret token format. Please obtain a new secret from ThinkMemAIGuide.');
+    }
+
+    // 验证存储的secret
+    const isValid = await SecretManager.validateStoredSecret(this.storage, secret);
+    if (!isValid) {
+      throw new InvalidSecretError('Invalid or expired secret token. Please obtain a new secret from ThinkMemAIGuide.');
+    }
+  }
+
+  /**
+   * 设置Prompt处理器
+   */
+  private setupPromptHandlers(): void {
+    this.setupAIGuidePrompt();
+  }
+
+  /**
+   * AI助手指南Prompt
+   */
+  private setupAIGuidePrompt(): void {
+    this.server.registerPrompt(
+      'ThinkMemAIGuide',
+      {
+        title: 'THINK-MEM AI助手指南',
+        description: '提供完整的THINK-MEM AI助手操作指南，包含NamePath定位系统详解、实际应用范例和最佳实践。帮助AI助手快速掌握如何使用ThinkMem系统进行记忆管理和智能交互。当AI助手阅读到本描述的时候（在服务用户之前）务必阅读本指南。',
+        argsSchema: {
+          section: z.enum(['full', 'basic', 'namepath', 'examples', 'patterns']).optional().describe('指南部分：full=完整指南，basic=基础规范，namepath=NamePath详解，examples=应用范例'),
+          assistant_name: z.string().optional().describe('助手名称，用于个性化指南内容')
+        }
+      },
+      async ({ section = 'full', assistant_name = 'ThinkMem测试员' }) => {
+        const content = await this.handleAIGuideRequest(section, assistant_name);
+
+        return {
+          messages: [
+            {
+              role: 'user',
+              content: {
+                type: 'text',
+                text: content
+              }
+            }
+          ]
+        };
+      }
+    );
   }
 }

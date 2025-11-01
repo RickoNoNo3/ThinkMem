@@ -7,7 +7,9 @@ import { JsonStorage } from '../../../storage/JsonStorage';
 import { ListMemory } from '../../../memory/ListMemory';
 import {
   AppendListElementRequest,
-  MCPResponse
+  AppendListElementResponse,
+  MCPResponse,
+  ListMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -21,7 +23,7 @@ export async function appendListElementHandler(
   storage: JsonStorage,
   request: AppendListElementRequest
 ): Promise<MCPResponse> {
-  const { name, data, description } = request;
+  const { name, child_name, data, description } = request;
 
   // 解析namePath获取memory对象
   const memory = storage.getMemory(name);
@@ -32,6 +34,9 @@ export async function appendListElementHandler(
   const listMemory = ListMemory.fromJSON(memory as any);
 
   // 验证输入
+  if (typeof child_name !== 'string') {
+    throw new ValidationError('child_name', 'child_name must be a string');
+  }
   if (typeof data !== 'string') {
     throw new ValidationError('data', 'data must be a string');
   }
@@ -39,22 +44,25 @@ export async function appendListElementHandler(
     throw new ValidationError('description', 'description must be a string');
   }
 
-  // 生成元素名称（基于时间戳）
-  const elementName = `element_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-
   // 执行添加操作
-  listMemory.append(elementName, data, description);
+  listMemory.append(child_name, data, description);
 
   // 更新存储
   await storage.updateMemory(listMemory);
 
+  // 添加ListMemory元数据，与searchMemory保持一致
+  const metadata: ListMemoryMetadata = {
+    length: listMemory.length,
+    role: listMemory.role
+  };
+
+  const responseData: AppendListElementResponse = {
+    message: `Element '${child_name}' appended successfully to '${name}'`,
+    elementName: child_name,
+    metadata
+  };
   return {
     success: true,
-    data: {
-      message: `Element appended successfully to '${name}'`,
-      elementName,
-      listLength: listMemory.length,
-      role: listMemory.role
-    }
+    data: responseData
   };
 }

@@ -8,7 +8,10 @@ import { ListMemory } from '../../../memory/ListMemory';
 import { RawMemory } from '../../../memory/RawMemory';
 import {
   PeekStackElementRequest,
-  MCPResponse
+  PeekStackElementResponse,
+  MCPResponse,
+  RawMemoryMetadata,
+  ListMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -39,27 +42,53 @@ export async function peekStackElementHandler(
 
   // 检查栈是否为空
   if (listMemory.length === 0) {
+    // 构建ListMemory元数据
+    const metadata: ListMemoryMetadata = {
+      length: listMemory.length,
+      role: listMemory.role
+    };
+
+    // 构建完整的PeekStackElementResponse
+    const responseData: PeekStackElementResponse = {
+      message: `Stack '${name}' is empty, no element to peek`,
+      element: null,
+      metadata
+    };
+
     return {
       success: true,
-      data: {
-        message: `Stack '${name}' is empty, no element to peek`,
-        element: null,
-        listLength: 0,
-        role: listMemory.role
-      }
+      data: responseData
     };
   }
 
   // 执行查看操作
   const element = listMemory.peekTop();
 
+  // 添加RawMemory元数据，与searchMemory保持一致
+  let elementMetadata: RawMemoryMetadata | undefined;
+  if (element) {
+    elementMetadata = {
+      nLines: element.nLines,
+      nChars: element.nChars
+    };
+  }
+
+  // 添加ListMemory元数据
+  const metadata: ListMemoryMetadata = {
+    length: listMemory.length,
+    role: listMemory.role
+  };
+
+  // 构建完整的PeekStackElementResponse
+  const responseData: PeekStackElementResponse = {
+    message: `Element peeked from top of stack '${name}' successfully`,
+    element: element ? element.toSmartJSON() : null,
+    elementMetadata,
+    metadata
+  };
+
   return {
     success: true,
-    data: {
-      message: `Element peeked from top of stack '${name}' successfully`,
-      element: element ? element.toSmartJSON() : null,
-      listLength: listMemory.length,
-      role: listMemory.role
-    }
+    data: responseData
   };
 }

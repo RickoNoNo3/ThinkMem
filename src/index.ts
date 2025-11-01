@@ -3,9 +3,12 @@
 import { Command } from 'commander';
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs';
 import { ThinkMemServer } from './server/ThinkMemServer';
-import { HttpSSEServer } from './server/HttpServer';
+// import { StreamableHTTPServer } from './server/HttpServer';
 import { ConfigError } from './utils/errors';
+import { startHTTPServer } from './server/HttpServer';
+
 
 const program = new Command();
 
@@ -18,35 +21,38 @@ program
   .option('-m, --mode <mode>', 'Operation mode (stdio|http)', 'stdio')
   .option('-p, --port <port>', 'HTTP server port (when mode is http)', '13809')
   .option('-d, --db <path>', 'Database file path', getDefaultDbPath())
-  .option('--sim-mode <mode>', 'Similarity calculation mode', 'levenshtein')
-  .option('--emb-url <url>', 'Embedding API URL', 'https://api.openai.com/v1/embeddings')
-  .option('--emb-model <model>', 'Embedding model name', 'text-embedding-ada-002')
-  .option('--emb-key <key>', 'Embedding API key', process.env.THINK_MEM_EMB_KEY)
   .action(async (options) => {
     try {
       // 验证配置
       validateConfig(options);
 
       if (options.mode === 'stdio') {
+        console.error('THINK-MEM MCP Server running in stdio mode');
         // MCP stdio模式
         const server = new ThinkMemServer(options.db);
+        // Graceful shutdown
+        process.on('SIGINT', async () => {
+          await server.close();
+          process.exit(0);
+        });
+        process.on('SIGTERM', async () => {
+          await server.close();
+          process.exit(0);
+        });
+        // Start MCP Server
         await server.run();
       } else if (options.mode === 'http') {
-        // HTTP SSE模式
-        const port = parseInt(options.port);
-        const httpServer = new HttpSSEServer(port, options.db);
-        await httpServer.start();
-
-        // 优雅关闭处理
+        // StreamableHTTP Server
+        const server = new ThinkMemServer(options.db);
         process.on('SIGINT', async () => {
-          await httpServer.stop();
+          await server.close();
           process.exit(0);
         });
-
         process.on('SIGTERM', async () => {
-          await httpServer.stop();
+          await server.close();
           process.exit(0);
         });
+        startHTTPServer(server, parseInt(options.port));
       } else {
         throw new ConfigError(`Invalid mode: ${options.mode}. Must be 'stdio' or 'http'`);
       }
@@ -79,6 +85,11 @@ function validateConfig(options: any): void {
     }
   }
 
+  // 修复：为 simMode 设置默认值，如果未定义则使用 'levenshtein'
+  if (!options.simMode) {
+    options.simMode = 'levenshtein';
+  }
+
   if (!['levenshtein', 'cosine'].includes(options.simMode)) {
     throw new ConfigError(`Invalid simMode: ${options.simMode}. Must be 'levenshtein' or 'cosine'`);
   }
@@ -96,21 +107,6 @@ process.on('uncaughtException', (error) => {
 
 process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
-});
-
-// 优雅关闭（仅用于stdio模式）
-process.on('SIGINT', () => {
-  if (process.argv.includes('--mode') && process.argv.includes('http')) {
-    return; // HTTP模式有自己的关闭处理
-  }
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  if (process.argv.includes('--mode') && process.argv.includes('http')) {
-    return; // HTTP模式有自己的关闭处理
-  }
-  process.exit(0);
 });
 
 // 解析命令行参数并运行

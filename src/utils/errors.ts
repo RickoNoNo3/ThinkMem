@@ -55,3 +55,15 @@ export class ConfigError extends ThinkMemError {
     super(`Configuration error: ${message}`, 'CONFIG_ERROR');
   }
 }
+
+export class MissingSecretError extends ThinkMemError {
+  constructor(toolName: string) {
+    super(`Missing required secret for tool '${toolName}'. Please call 'ThinkMemAIGuide' with section='full' to obtain access token.`, 'MISSING_SECRET', { toolName });
+  }
+}
+
+export class InvalidSecretError extends ThinkMemError {
+  constructor(reason: string) {
+    super(`Invalid or expired secret: ${reason}. Please call 'ThinkMemAIGuide' with section='full' to obtain a new access token.`, 'INVALID_SECRET', { reason });
+  }
+}

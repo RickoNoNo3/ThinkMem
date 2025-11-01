@@ -47,14 +47,31 @@ export interface GraphEdge extends RawMemory {
   bidir: boolean;
 }
 
-// 操作请求类型定义
-export interface BaseRequest {}
-
-export interface BaseResponse {
-  success: boolean;
-  error?: string;
-  data?: any;
+// 元数据类型定义
+export interface RawMemoryMetadata {
+  nLines: number;
+  nChars: number;
 }
+
+export interface ListMemoryMetadata {
+  length: number;
+  role: "array" | "deque" | "stack";
+}
+
+export interface ElementMetadata {
+  metadata: RawMemoryMetadata;
+}
+
+// 统一响应类型
+export interface StandardResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  code?: string;
+  details?: any;
+}
+
+export type BaseResponse = StandardResponse;
 
 // Memory操作请求
 export interface AddRawMemoryRequest {
@@ -86,8 +103,18 @@ export interface SearchMemoryRequest {
   };
 }
 
+// 搜索结果相关类型使用已定义的RawMemoryMetadata和ListMemoryMetadata
+
+// 扩展的搜索结果类型，包含特定类型的元数据
+export interface ExtendedSearchResult {
+  name: string;
+  type: "raw" | "list" | "graph";
+  description: string;
+  metadata?: RawMemoryMetadata | ListMemoryMetadata;
+}
+
 export interface SearchMemoryResponse {
-  results: Memory[];
+  results: ExtendedSearchResult[];
 }
 
 // RawMemory操作请求
@@ -143,6 +170,65 @@ export interface ReadRawLinesResponse {
   happyToSum?: boolean;
 }
 
+// RawMemory操作响应
+export interface AddRawMemoryResponse {
+  message: string;
+  type: "raw";
+  metadata: RawMemoryMetadata;
+}
+
+export interface WriteRawResponse {
+  message: string;
+  operation: "write" | "append";
+  metadata: RawMemoryMetadata;
+}
+
+export interface ReplaceRawLinesResponse {
+  message: string;
+  lineBeg: number;
+  lineEnd: number;
+  pattern: string;
+  metadata: RawMemoryMetadata;
+}
+
+export interface DeleteRawLinesResponse {
+  message: string;
+  lineBeg: number;
+  lineEnd: number;
+  deletedLineCount: number;
+  beforeLines: number;
+  afterLines: number;
+  metadata: RawMemoryMetadata;
+}
+
+export interface InsertRawLinesResponse {
+  message: string;
+  lineNo: number;
+  insertedLineCount: number;
+  beforeLines: number;
+  afterLines: number;
+  metadata: RawMemoryMetadata;
+}
+
+export interface SummarizeRawLinesResponse {
+  message: string;
+  lineBeg: number;
+  lineEnd: number;
+  summaryText: string;
+  totalSummaries: number;
+  metadata: RawMemoryMetadata;
+}
+
+export interface DesummarizeRawLinesResponse {
+  message: string;
+  lineBeg: number;
+  lineEnd: number;
+  deletedSummaries: number;
+  beforeSummaries: number;
+  afterSummaries: number;
+  metadata: RawMemoryMetadata;
+}
+
 export interface SearchRawLinesRequest {
   namePath: string;
   pattern: string;
@@ -153,17 +239,23 @@ export interface SearchRawLinesResponse {
     lineNo: number;
     text: string;
   }>;
+  searchPattern: string;
+  totalLines: number;
+  matchedLines: number;
+  metadata: RawMemoryMetadata;
 }
 
 // ListMemory操作请求
 export interface AppendListElementRequest {
   name: string;
+  child_name: string;
   data: string;
   description: string;
 }
 
 export interface PushDequeElementRequest {
   name: string;
+  child_name: string;
   data: string;
   description: string;
   position: "front" | "back";
@@ -171,12 +263,14 @@ export interface PushDequeElementRequest {
 
 export interface PushStackElementRequest {
   name: string;
+  child_name: string;
   data: string;
   description: string;
 }
 
 export interface InsertListElementRequest {
   name: string;
+  child_name: string;
   index: number;
   data: string;
   description: string;
@@ -185,6 +279,11 @@ export interface InsertListElementRequest {
 export interface DeleteListElementRequest {
   name: string;
   index: number;
+}
+
+export interface DeleteListElementByNameRequest {
+  name: string;
+  child_name: string;
 }
 
 export interface PopDequeElementRequest {
@@ -211,6 +310,19 @@ export interface GetListElementResponse {
     description: string;
     content: any;
   };
+  elementMetadata?: RawMemoryMetadata;
+}
+
+// Memory操作响应
+export interface AddMemoryResponse {
+  message: string;
+  type: "raw" | "list" | "graph";
+  metadata?: RawMemoryMetadata | ListMemoryMetadata;
+}
+
+export interface DeleteMemoryResponse {
+  message: string;
+  metadata?: RawMemoryMetadata | ListMemoryMetadata;
 }
 
 export interface PeekDequeElementRequest {
@@ -218,8 +330,31 @@ export interface PeekDequeElementRequest {
   position: "front" | "back";
 }
 
+export interface PeekDequeElementResponse {
+  message: string;
+  position: "front" | "back";
+  element: {
+    name: string;
+    description: string;
+    content: any;
+  } | null;
+  elementMetadata?: RawMemoryMetadata;
+  metadata: ListMemoryMetadata;
+}
+
 export interface PeekStackElementRequest {
   name: string;
+}
+
+export interface PeekStackElementResponse {
+  message: string;
+  element: {
+    name: string;
+    description: string;
+    content: any;
+  } | null;
+  elementMetadata?: RawMemoryMetadata;
+  metadata: ListMemoryMetadata;
 }
 
 export interface SearchListElementsRequest {
@@ -235,7 +370,96 @@ export interface SearchListElementsResponse {
       description: string;
       content: any;
     };
+    metadata?: RawMemoryMetadata;
   }>;
+  searchPattern: string | null;
+  totalElements: number;
+  matchedElements: number;
+  metadata: ListMemoryMetadata;
+}
+
+// ListMemory操作响应
+export interface AppendListElementResponse {
+  message: string;
+  elementName: string;
+  metadata: ListMemoryMetadata;
+}
+
+export interface PushDequeElementResponse {
+  message: string;
+  elementName: string;
+  position: "front" | "back";
+  metadata: ListMemoryMetadata;
+}
+
+export interface PushStackElementResponse {
+  message: string;
+  elementName: string;
+  metadata: ListMemoryMetadata;
+}
+
+export interface InsertListElementResponse {
+  message: string;
+  elementName: string;
+  index: number;
+  metadata: ListMemoryMetadata;
+}
+
+export interface DeleteListElementResponse {
+  message: string;
+  index: number;
+  deletedElement: {
+    name: string;
+    description: string;
+    content: any;
+  } | null;
+  beforeLength: number;
+  afterLength: number;
+  metadata: ListMemoryMetadata;
+}
+
+export interface DeleteListElementByNameResponse {
+  message: string;
+  elementName: string;
+  index: number;
+  deletedElement: {
+    name: string;
+    description: string;
+    content: any;
+  } | null;
+  beforeLength: number;
+  afterLength: number;
+  metadata: ListMemoryMetadata;
+}
+
+export interface PopDequeElementResponse {
+  message: string;
+  position: "front" | "back";
+  poppedElement: {
+    name: string;
+    description: string;
+    content: any;
+  };
+  poppedElementMetadata: RawMemoryMetadata;
+  metadata: ListMemoryMetadata;
+}
+
+export interface PopStackElementResponse {
+  message: string;
+  poppedElement: {
+    name: string;
+    description: string;
+    content: any;
+  };
+  poppedElementMetadata: RawMemoryMetadata;
+  metadata: ListMemoryMetadata;
+}
+
+export interface ClearListResponse {
+  message: string;
+  beforeLength: number;
+  afterLength: number;
+  metadata: ListMemoryMetadata;
 }
 
 // 统一请求类型
@@ -258,6 +482,7 @@ export type MCPRequest =
   | PushStackElementRequest
   | InsertListElementRequest
   | DeleteListElementRequest
+  | DeleteListElementByNameRequest
   | PopDequeElementRequest
   | PopStackElementRequest
   | ClearListRequest
@@ -273,7 +498,27 @@ export type MCPResponse = BaseResponse & {
     | ReadRawLinesResponse
     | SearchRawLinesResponse
     | GetListElementResponse
-    | SearchRawLinesResponse
+    | SearchListElementsResponse
+    | AddRawMemoryResponse
+    | WriteRawResponse
+    | ReplaceRawLinesResponse
+    | DeleteRawLinesResponse
+    | InsertRawLinesResponse
+    | SummarizeRawLinesResponse
+    | DesummarizeRawLinesResponse
+    | AppendListElementResponse
+    | PushDequeElementResponse
+    | PushStackElementResponse
+    | InsertListElementResponse
+    | DeleteListElementResponse
+    | DeleteListElementByNameResponse
+    | PopDequeElementResponse
+    | PopStackElementResponse
+    | ClearListResponse
+    | PeekDequeElementResponse
+    | PeekStackElementResponse
+    | AddMemoryResponse
+    | DeleteMemoryResponse
     | RawMemory
     | any;
 };

@@ -7,7 +7,9 @@ import { JsonStorage } from '../../../storage/JsonStorage';
 import { ListMemory } from '../../../memory/ListMemory';
 import {
   DeleteListElementRequest,
-  MCPResponse
+  DeleteListElementResponse,
+  MCPResponse,
+  ListMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -51,15 +53,22 @@ export async function deleteListElementHandler(
   // 更新存储
   await storage.updateMemory(listMemory);
 
+  // 添加ListMemory元数据，与searchMemory保持一致
+  const metadata: ListMemoryMetadata = {
+    length: listMemory.length,
+    role: listMemory.role
+  };
+
+  const responseData: DeleteListElementResponse = {
+    message: `Element deleted successfully from index ${index} in '${name}'`,
+    index,
+    deletedElement: deletedElement ? deletedElement.toSmartJSON() : null,
+    beforeLength,
+    afterLength: listMemory.length,
+    metadata
+  };
   return {
     success: true,
-    data: {
-      message: `Element deleted successfully from index ${index} in '${name}'`,
-      index,
-      deletedElement: deletedElement ? deletedElement.toSmartJSON() : null,
-      beforeLength,
-      afterLength: listMemory.length,
-      role: listMemory.role
-    }
+    data: responseData
   };
 }

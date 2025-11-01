@@ -7,7 +7,9 @@ import { JsonStorage } from '../../../storage/JsonStorage';
 import { ListMemory } from '../../../memory/ListMemory';
 import {
   InsertListElementRequest,
-  MCPResponse
+  InsertListElementResponse,
+  MCPResponse,
+  ListMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -21,7 +23,7 @@ export async function insertListElementHandler(
   storage: JsonStorage,
   request: InsertListElementRequest
 ): Promise<MCPResponse> {
-  const { name, index, data, description } = request;
+  const { name, child_name, index, data, description } = request;
 
   // 解析namePath获取memory对象
   const memory = storage.getMemory(name);
@@ -32,6 +34,9 @@ export async function insertListElementHandler(
   const listMemory = ListMemory.fromJSON(memory as any);
 
   // 验证输入
+  if (typeof child_name !== 'string') {
+    throw new ValidationError('child_name', 'child_name must be a string');
+  }
   if (typeof index !== 'number' || index < 0) {
     throw new ValidationError('index', 'index must be a non-negative number');
   }
@@ -47,23 +52,26 @@ export async function insertListElementHandler(
     throw new ValidationError('index', `index (${index}) cannot exceed list length (${listMemory.length})`);
   }
 
-  // 生成元素名称
-  const elementName = `element_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-
   // 执行插入操作
-  listMemory.insertAt(index, elementName, data, description);
+  listMemory.insertAt(index, child_name, data, description);
 
   // 更新存储
   await storage.updateMemory(listMemory);
 
+  // 添加ListMemory元数据，与searchMemory保持一致
+  const metadata: ListMemoryMetadata = {
+    length: listMemory.length,
+    role: listMemory.role
+  };
+
+  const responseData: InsertListElementResponse = {
+    message: `Element '${child_name}' inserted successfully at index ${index} in '${name}'`,
+    elementName: child_name,
+    index,
+    metadata
+  };
   return {
     success: true,
-    data: {
-      message: `Element inserted successfully at index ${index} in '${name}'`,
-      elementName,
-      index,
-      listLength: listMemory.length,
-      role: listMemory.role
-    }
+    data: responseData
   };
 }

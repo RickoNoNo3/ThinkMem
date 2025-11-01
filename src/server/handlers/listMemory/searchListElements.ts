@@ -9,7 +9,9 @@ import { RawMemory } from '../../../memory/RawMemory';
 import {
   SearchListElementsRequest,
   SearchListElementsResponse,
-  MCPResponse
+  MCPResponse,
+  ListMemoryMetadata,
+  RawMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError
@@ -35,22 +37,36 @@ export async function searchListElementsHandler(
   // 执行搜索操作
   const searchResults = listMemory.search(pattern);
 
-  // 构建响应
-  const response: SearchListElementsResponse = {
-    results: searchResults.map(result => ({
+  // 构建结果，为每个RawMemory元素添加元数据
+  const results = searchResults.map(result => {
+    const rawMemory = result.data;
+    return {
       index: result.index,
-      data: result.data.toSmartJSON()
-    }))
+      data: rawMemory.toSmartJSON(),
+      metadata: {
+        nLines: rawMemory.nLines,
+        nChars: rawMemory.nChars
+      } as RawMemoryMetadata
+    };
+  });
+
+  // 添加ListMemory元数据，与searchMemory保持一致
+  const listMetadata: ListMemoryMetadata = {
+    length: listMemory.length,
+    role: listMemory.role
+  };
+
+  // 构建完整的SearchListElementsResponse
+  const responseData: SearchListElementsResponse = {
+    results,
+    searchPattern: pattern || null,
+    totalElements: listMemory.length,
+    matchedElements: searchResults.length,
+    metadata: listMetadata
   };
 
   return {
     success: true,
-    data: {
-      ...response,
-      searchPattern: pattern || null,
-      totalElements: listMemory.length,
-      matchedElements: searchResults.length,
-      role: listMemory.role
-    }
+    data: responseData
   };
 }

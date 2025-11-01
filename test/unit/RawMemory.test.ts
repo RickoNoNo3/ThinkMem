@@ -1,4 +1,16 @@
 import { RawMemory } from '../../src/memory/RawMemory';
+import { JsonStorage } from '../../src/storage/JsonStorage';
+import { searchMemoryHandler } from '../../src/server/handlers/memory/searchMemory';
+import { addMemoryHandler } from '../../src/server/handlers/memory/addMemory';
+import { writeRawHandler } from '../../src/server/handlers/rawMemory/writeRaw';
+import {
+  AddRawMemoryRequest,
+  SearchMemoryRequest,
+  WriteRawRequest,
+  ExtendedSearchResult
+} from '../../src/types';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('RawMemory Unit Tests', () => {
   let rawMemory: RawMemory;
@@ -399,6 +411,268 @@ describe('RawMemory Unit Tests', () => {
       expect(result.data).toBe('');
       expect(result.summaries).toHaveLength(0);
       expect(result.happyToSum).toBe(false);
+    });
+  });
+
+  // =================== RawMemory Handler Tests ===================
+  describe('RawMemory Handler Tests', () => {
+    let storage: JsonStorage;
+    let tempDbPath: string;
+    let testMemory: RawMemory;
+
+    beforeEach(async () => {
+      tempDbPath = path.join(__dirname, '..', '..', 'temp_test_raw_handlers.db.json');
+      storage = new JsonStorage(tempDbPath);
+      testMemory = new RawMemory('test_memory', 'Test Memory', 'Initial content\nSecond line');
+      await storage.addMemory(testMemory);
+    });
+
+    afterEach(() => {
+      try {
+        if (fs.existsSync(tempDbPath)) {
+          fs.unlinkSync(tempDbPath);
+        }
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    });
+
+    describe('addMemory Handler', () => {
+      test('should create RawMemory successfully', async () => {
+        const request: AddRawMemoryRequest = {
+          name: 'test_raw',
+          description: 'Test Raw Memory',
+          data: 'This is test data'
+        };
+
+        const result = await addMemoryHandler.addRawMemory(storage, request);
+
+        expect(result.success).toBe(true);
+        expect(result.data.message).toContain("RawMemory 'test_raw' created successfully");
+        expect(result.data.type).toBe('raw');
+        expect(result.data.nLines).toBe(1);
+        expect(result.data.nChars).toBe(17);
+      });
+
+      test('should handle empty RawMemory data', async () => {
+        const request: AddRawMemoryRequest = {
+          name: 'test_empty',
+          description: 'Test Empty Memory',
+          data: ''
+        };
+
+        const result = await addMemoryHandler.addRawMemory(storage, request);
+
+        expect(result.success).toBe(true);
+        expect(result.data.nLines).toBe(0);
+        expect(result.data.nChars).toBe(0);
+      });
+
+      test('should throw error for duplicate memory name', async () => {
+        const request: AddRawMemoryRequest = {
+          name: 'test_memory', // Already exists
+          description: 'Duplicate Test',
+          data: 'Test data'
+        };
+
+        await expect(addMemoryHandler.addRawMemory(storage, request))
+          .rejects.toThrow("Memory 'test_memory' already exists");
+      });
+
+      test('should throw error for missing required fields', async () => {
+        const invalidRequest = {
+          description: 'Missing name'
+        } as AddRawMemoryRequest;
+
+        await expect(addMemoryHandler.addRawMemory(storage, invalidRequest))
+          .rejects.toThrow();
+      });
+    });
+
+    describe('writeRaw Handler', () => {
+      test('should write data in overwrite mode successfully', async () => {
+        const request: WriteRawRequest = {
+          namePath: 'test_memory',
+          data: 'New content\nAnother line',
+          isAppend: false
+        };
+
+        const result = await writeRawHandler(storage, request);
+
+        expect(result.success).toBe(true);
+        expect(result.data.operation).toBe('write');
+        expect(result.data.metadata.nLines).toBe(2);
+        expect(result.data.metadata.nChars).toBe(24);
+      });
+
+      test('should write data in append mode successfully', async () => {
+        const request: WriteRawRequest = {
+          namePath: 'test_memory',
+          data: 'Appended line',
+          isAppend: true
+        };
+
+        const result = await writeRawHandler(storage, request);
+
+        expect(result.success).toBe(true);
+        expect(result.data.message).toContain("appended to 'test_memory' successfully");
+        expect(result.data.operation).toBe('append');
+        expect(result.data.metadata.nLines).toBe(3);
+        expect(result.data.metadata.nChars).toBe(41);
+      });
+
+      test('should throw error for non-existent memory', async () => {
+        const request: WriteRawRequest = {
+          namePath: 'nonexistent_memory',
+          data: 'Some data'
+        };
+
+        await expect(writeRawHandler(storage, request))
+          .rejects.toThrow();
+      });
+
+      test('should throw error for invalid data type', async () => {
+        const request = {
+          namePath: 'test_memory',
+          data: 12345
+        } as any;
+
+        await expect(writeRawHandler(storage, request))
+          .rejects.toThrow('Data must be a string');
+      });
+    });
+
+    describe('searchMemory Handler (RawMemory Tests)', () => {
+      test('should return RawMemory results with correct metadata', async () => {
+        // Add more test memories
+        const rawMemory2 = new RawMemory('raw_test_2', 'Test raw memory 2', 'Single line content');
+        await storage.addMemory(rawMemory2);
+
+        const request: SearchMemoryRequest = {
+          query: {
+            type: 'raw'
+          }
+        };
+
+        const response = await searchMemoryHandler(storage, request);
+
+        expect(response.success).toBe(true);
+        const rawResults = response.data.results.filter((r: ExtendedSearchResult) => r.type === 'raw');
+        expect(rawResults).toHaveLength(2);
+
+        rawResults.forEach((result: ExtendedSearchResult) => {
+          expect(result.metadata).toBeDefined();
+          expect((result.metadata as any).nLines).toBeDefined();
+          expect((result.metadata as any).nChars).toBeDefined();
+        });
+      });
+
+      test('should filter RawMemory results by pattern', async () => {
+        const request: SearchMemoryRequest = {
+          query: {
+            pattern: 'test',
+            type: 'raw'
+          }
+        };
+
+        const response = await searchMemoryHandler(storage, request);
+
+        expect(response.success).toBe(true);
+        response.data.results.forEach((result: ExtendedSearchResult) => {
+          expect(result.type).toBe('raw');
+          expect(result.name).toContain('test');
+          expect(result.metadata).toBeDefined();
+        });
+      });
+    });
+  });
+
+  // =================== RawMemory Integration Tests ===================
+  describe('RawMemory Integration Tests', () => {
+    let storage: JsonStorage;
+    let tempDbPath: string;
+
+    beforeEach(async () => {
+      tempDbPath = path.join(__dirname, '..', '..', 'temp_test_raw_integration.db.json');
+      storage = new JsonStorage(tempDbPath);
+    });
+
+    afterEach(() => {
+      try {
+        if (fs.existsSync(tempDbPath)) {
+          fs.unlinkSync(tempDbPath);
+        }
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    });
+
+    test('should persist changes to storage', async () => {
+      const request: AddRawMemoryRequest = {
+        name: 'test_persistence',
+        description: 'Test Persistence',
+        data: 'Persistent content'
+      };
+
+      await addMemoryHandler.addRawMemory(storage, request);
+
+      // Create new storage instance to verify persistence
+      const newStorage = new JsonStorage(tempDbPath);
+      const persistedMemory = newStorage.getMemory('test_persistence');
+      expect(persistedMemory).toBeDefined();
+      expect(persistedMemory?.name).toBe('test_persistence');
+    });
+
+    test('should handle multiple sequential writes', async () => {
+      // Create initial memory
+      await addMemoryHandler.addRawMemory(storage, {
+        name: 'multi_write_test',
+        description: 'Multi-write test',
+        data: 'Initial content'
+      });
+
+      // Perform multiple writes
+      const requests = [
+        { namePath: 'multi_write_test', data: 'First write', isAppend: false },
+        { namePath: 'multi_write_test', data: 'Second write', isAppend: false },
+        { namePath: 'multi_write_test', data: 'Third write', isAppend: false }
+      ];
+
+      for (const req of requests) {
+        const result = await writeRawHandler(storage, req);
+        expect(result.success).toBe(true);
+      }
+
+      // Verify final state
+      const finalMemory = storage.getMemory('multi_write_test');
+      const rawMemory = RawMemory.fromJSON(finalMemory as any);
+      expect(rawMemory.readData(0, 0)).toBe('Third write');
+    });
+
+    test('should handle special characters in data', async () => {
+      const specialData = 'Special chars: 中文 🚀 \n\t\r "quotes" \'apostrophes\' $%&*()[]{}';
+      const request: AddRawMemoryRequest = {
+        name: 'test_special_chars',
+        description: 'Test Special Characters',
+        data: specialData
+      };
+
+      const result = await addMemoryHandler.addRawMemory(storage, request);
+      expect(result.success).toBe(true);
+      expect(result.data.nChars).toBe(specialData.length);
+    });
+
+    test('should handle very large data content', async () => {
+      const largeData = 'A'.repeat(100000); // 100KB data
+      const request: AddRawMemoryRequest = {
+        name: 'test_large_data',
+        description: 'Test Large Data',
+        data: largeData
+      };
+
+      const result = await addMemoryHandler.addRawMemory(storage, request);
+      expect(result.success).toBe(true);
+      expect(result.data.nChars).toBe(100000);
     });
   });
 });

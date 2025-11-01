@@ -7,7 +7,9 @@ import { JsonStorage } from '../../../storage/JsonStorage';
 import { ListMemory } from '../../../memory/ListMemory';
 import {
   PushStackElementRequest,
-  MCPResponse
+  PushStackElementResponse,
+  MCPResponse,
+  ListMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -22,7 +24,7 @@ export async function pushStackElementHandler(
   storage: JsonStorage,
   request: PushStackElementRequest
 ): Promise<MCPResponse> {
-  const { name, data, description } = request;
+  const { name, child_name, data, description } = request;
 
   // 解析namePath获取memory对象
   const memory = storage.getMemory(name);
@@ -38,6 +40,9 @@ export async function pushStackElementHandler(
   }
 
   // 验证输入
+  if (typeof child_name !== 'string') {
+    throw new ValidationError('child_name', 'child_name must be a string');
+  }
   if (typeof data !== 'string') {
     throw new ValidationError('data', 'data must be a string');
   }
@@ -45,22 +50,25 @@ export async function pushStackElementHandler(
     throw new ValidationError('description', 'description must be a string');
   }
 
-  // 生成元素名称
-  const elementName = `stack_element_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-
   // 执行入栈操作
-  listMemory.pushTop(elementName, data, description);
+  listMemory.pushTop(child_name, data, description);
 
   // 更新存储
   await storage.updateMemory(listMemory);
 
+  // 添加ListMemory元数据，与searchMemory保持一致
+  const metadata: ListMemoryMetadata = {
+    length: listMemory.length,
+    role: listMemory.role
+  };
+
+  const responseData: PushStackElementResponse = {
+    message: `Element '${child_name}' pushed to top of stack '${name}' successfully`,
+    elementName: child_name,
+    metadata
+  };
   return {
     success: true,
-    data: {
-      message: `Element pushed to top of stack '${name}' successfully`,
-      elementName,
-      listLength: listMemory.length,
-      role: listMemory.role
-    }
+    data: responseData
   };
 }

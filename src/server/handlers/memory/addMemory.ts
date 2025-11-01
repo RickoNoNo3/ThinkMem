@@ -27,6 +27,10 @@ export async function addRawMemoryHandler(
 ): Promise<MCPResponse> {
   const { name, description, data } = request;
 
+  if (name == null || name === '') {
+    throw new ValidationError('name', 'Name cannot be empty');
+  }
+
   // 检查是否已存在
   if (storage.hasMemory(name)) {
     throw new MemoryAlreadyExistsError(name);

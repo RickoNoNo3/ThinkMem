@@ -7,7 +7,9 @@ import { JsonStorage } from '../../../storage/JsonStorage';
 import {
   SearchMemoryRequest,
   SearchMemoryResponse,
-  Memory,
+  ExtendedSearchResult,
+  RawMemoryMetadata,
+  ListMemoryMetadata,
   MCPResponse
 } from '../../../types';
 
@@ -25,28 +27,47 @@ export async function searchMemoryHandler(
 
   // 应用筛选条件
   if (query) {
-    // 按名称模式筛选
-    if (query.pattern) {
-      const pattern = query.pattern.toLowerCase();
-      results = results.filter(memory =>
-        memory.name.toLowerCase().includes(pattern) ||
-        memory.description.toLowerCase().includes(pattern)
-      );
-    }
-
     // 按类型筛选
     if (query.type) {
       results = results.filter(memory => memory.type === query.type);
     }
+
+    // 按名称模式筛选（使用正则表达式）
+    if (query.pattern) {
+      const re = new RegExp(query.pattern, 'i');
+      // results = results.filter(memory => re.test(memory.name + "\n" + memory.description));
+      results = results.filter(memory => {
+        return re.test(memory.name + "\n" + memory.description);
+      });
+    }
   }
 
-  // 构建响应
+  // 构建响应，包含类型特定的元数据
   const response: SearchMemoryResponse = {
-    results: results.map(memory => ({
-      name: memory.name,
-      type: memory.type,
-      description: memory.description
-    } as Memory))
+    results: results.map(memory => {
+      const result: ExtendedSearchResult = {
+        name: memory.name,
+        type: memory.type,
+        description: memory.description
+      };
+
+      // 根据Memory类型添加特定的元数据
+      if (memory.type === 'raw') {
+        const rawMemory = memory as any; // 类型断言，因为我们从storage获取的是完整对象
+        result.metadata = {
+          nLines: rawMemory.nLines || 0,
+          nChars: rawMemory.nChars || 0
+        } as RawMemoryMetadata;
+      } else if (memory.type === 'list') {
+        const listMemory = memory as any; // 类型断言
+        result.metadata = {
+          length: listMemory.list?.length || 0,
+          role: listMemory.role || 'array'
+        } as ListMemoryMetadata;
+      }
+
+      return result;
+    })
   };
 
   return {

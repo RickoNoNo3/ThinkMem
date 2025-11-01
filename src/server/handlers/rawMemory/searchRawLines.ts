@@ -8,7 +8,8 @@ import { RawMemory } from '../../../memory/RawMemory';
 import {
   SearchRawLinesRequest,
   SearchRawLinesResponse,
-  MCPResponse
+  MCPResponse,
+  RawMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -42,21 +43,29 @@ export async function searchRawLinesHandler(
   // 执行搜索操作
   const searchResults = rawMemory.searchLines(pattern);
 
-  // 构建响应
-  const response: SearchRawLinesResponse = {
-    lines: searchResults.map(result => ({
-      lineNo: result.lineNo,
-      text: result.text
-    }))
+  // 构建lines数据
+  const lines = searchResults.map(result => ({
+    lineNo: result.lineNo,
+    text: result.text
+  }));
+
+  // 添加RawMemory元数据，与searchMemory保持一致
+  const metadata: RawMemoryMetadata = {
+    nLines: rawMemory.nLines,
+    nChars: rawMemory.nChars
+  };
+
+  // 构建完整的SearchRawLinesResponse
+  const responseData: SearchRawLinesResponse = {
+    lines,
+    searchPattern: pattern,
+    totalLines: rawMemory.nLines,
+    matchedLines: searchResults.length,
+    metadata
   };
 
   return {
     success: true,
-    data: {
-      ...response,
-      searchPattern: pattern,
-      totalLines: rawMemory.nLines,
-      matchedLines: searchResults.length
-    }
+    data: responseData
   };
 }

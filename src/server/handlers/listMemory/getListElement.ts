@@ -9,7 +9,9 @@ import { RawMemory } from '../../../memory/RawMemory';
 import {
   GetListElementRequest,
   GetListElementResponse,
-  MCPResponse
+  MCPResponse,
+  RawMemoryMetadata,
+  ListMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -46,18 +48,24 @@ export async function getListElementHandler(
   // 获取元素
   const element = listMemory.getAt(index);
 
-  // 构建响应
-  const response: GetListElementResponse = {
-    data: element ? element.toSmartJSON() : undefined
+  // 添加RawMemory元素元数据
+  let elementMetadata: RawMemoryMetadata | undefined;
+
+  if (element) {
+    elementMetadata = {
+      nLines: element.nLines,
+      nChars: element.nChars
+    };
+  }
+
+  // 构建完整的GetListElementResponse
+  const responseData: GetListElementResponse = {
+    data: element ? element.toSmartJSON() : undefined,
+    elementMetadata
   };
 
   return {
     success: true,
-    data: {
-      ...response,
-      index,
-      listLength: listMemory.length,
-      role: listMemory.role
-    }
+    data: responseData
   };
 }

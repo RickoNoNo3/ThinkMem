@@ -8,6 +8,7 @@ export { pushDequeElementHandler } from './pushDequeElement';
 export { pushStackElementHandler } from './pushStackElement';
 export { insertListElementHandler } from './insertListElement';
 export { deleteListElementHandler } from './deleteListElement';
+export { deleteListElementByNameHandler } from './deleteListElementByName';
 export { popDequeElementHandler } from './popDequeElement';
 export { popStackElementHandler } from './popStackElement';
 export { clearListHandler } from './clearList';

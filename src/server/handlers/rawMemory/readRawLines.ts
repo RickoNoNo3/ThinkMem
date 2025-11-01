@@ -8,7 +8,8 @@ import { RawMemory } from '../../../memory/RawMemory';
 import {
   ReadRawLinesRequest,
   ReadRawLinesResponse,
-  MCPResponse
+  MCPResponse,
+  RawMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -76,8 +77,17 @@ export async function readRawLinesHandler(
     };
   }
 
+  // 添加RawMemory元数据，与searchMemory保持一致
+  const metadata: RawMemoryMetadata = {
+    nLines: rawMemory.nLines,
+    nChars: rawMemory.nChars
+  };
+
   return {
     success: true,
-    data: response
+    data: {
+      ...response,
+      metadata
+    }
   };
 }

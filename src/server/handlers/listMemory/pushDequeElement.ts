@@ -7,7 +7,9 @@ import { JsonStorage } from '../../../storage/JsonStorage';
 import { ListMemory } from '../../../memory/ListMemory';
 import {
   PushDequeElementRequest,
-  MCPResponse
+  PushDequeElementResponse,
+  MCPResponse,
+  ListMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -22,7 +24,7 @@ export async function pushDequeElementHandler(
   storage: JsonStorage,
   request: PushDequeElementRequest
 ): Promise<MCPResponse> {
-  const { name, data, description, position } = request;
+  const { name, child_name, data, description, position } = request;
 
   // 解析namePath获取memory对象
   const memory = storage.getMemory(name);
@@ -38,6 +40,9 @@ export async function pushDequeElementHandler(
   }
 
   // 验证输入
+  if (typeof child_name !== 'string') {
+    throw new ValidationError('child_name', 'child_name must be a string');
+  }
   if (typeof data !== 'string') {
     throw new ValidationError('data', 'data must be a string');
   }
@@ -48,27 +53,30 @@ export async function pushDequeElementHandler(
     throw new ValidationError('position', 'position must be either "front" or "back"');
   }
 
-  // 生成元素名称
-  const elementName = `deque_element_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-
   // 执行入队操作
   if (position === 'front') {
-    listMemory.pushFront(elementName, data, description);
+    listMemory.pushFront(child_name, data, description);
   } else {
-    listMemory.pushBack(elementName, data, description);
+    listMemory.pushBack(child_name, data, description);
   }
 
   // 更新存储
   await storage.updateMemory(listMemory);
 
+  // 添加ListMemory元数据，与searchMemory保持一致
+  const metadata: ListMemoryMetadata = {
+    length: listMemory.length,
+    role: listMemory.role
+  };
+
+  const responseData: PushDequeElementResponse = {
+    message: `Element '${child_name}' pushed to ${position} of deque '${name}' successfully`,
+    elementName: child_name,
+    position,
+    metadata
+  };
   return {
     success: true,
-    data: {
-      message: `Element pushed to ${position} of deque '${name}' successfully`,
-      elementName,
-      position,
-      listLength: listMemory.length,
-      role: listMemory.role
-    }
+    data: responseData
   };
 }

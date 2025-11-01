@@ -7,7 +7,9 @@ import { JsonStorage } from '../../../storage/JsonStorage';
 import { RawMemory } from '../../../memory/RawMemory';
 import {
   InsertRawLinesRequest,
-  MCPResponse
+  InsertRawLinesResponse,
+  MCPResponse,
+  RawMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -56,15 +58,24 @@ export async function insertRawLinesHandler(
   // 更新存储
   await setRaw(rawMemory);
 
+  // 添加RawMemory元数据，与searchMemory保持一致
+  const metadata: RawMemoryMetadata = {
+    nLines: rawMemory.nLines,
+    nChars: rawMemory.nChars
+  };
+
+  // 构建符合InsertRawLinesResponse接口的响应数据
+  const responseData: InsertRawLinesResponse = {
+    message: `Text inserted successfully at line ${lineNo} in '${namePath}'`,
+    lineNo,
+    insertedLineCount,
+    beforeLines,
+    afterLines: rawMemory.nLines,
+    metadata
+  };
+
   return {
     success: true,
-    data: {
-      message: `Text inserted successfully at line ${lineNo} in '${namePath}'`,
-      lineNo,
-      insertedLineCount,
-      beforeLines,
-      afterLines: rawMemory.nLines,
-      nChars: rawMemory.nChars
-    }
+    data: responseData
   };
 }

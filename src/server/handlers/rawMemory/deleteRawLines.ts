@@ -7,7 +7,9 @@ import { JsonStorage } from '../../../storage/JsonStorage';
 import { RawMemory } from '../../../memory/RawMemory';
 import {
   DeleteRawLinesRequest,
-  MCPResponse
+  DeleteRawLinesResponse,
+  MCPResponse,
+  RawMemoryMetadata
 } from '../../../types';
 import {
   MemoryNotFoundError,
@@ -59,16 +61,25 @@ export async function deleteRawLinesHandler(
   // 更新存储
   await setRaw(rawMemory);
 
+  // 添加RawMemory元数据，与searchMemory保持一致
+  const metadata: RawMemoryMetadata = {
+    nLines: rawMemory.nLines,
+    nChars: rawMemory.nChars
+  };
+
+  // 构建符合DeleteRawLinesResponse接口的响应数据
+  const responseData: DeleteRawLinesResponse = {
+    message: `Lines ${lineBeg}-${lineEnd} deleted successfully from '${namePath}'`,
+    lineBeg,
+    lineEnd,
+    deletedLineCount,
+    beforeLines,
+    afterLines: rawMemory.nLines,
+    metadata
+  };
+
   return {
     success: true,
-    data: {
-      message: `Lines ${lineBeg}-${lineEnd} deleted successfully from '${namePath}'`,
-      lineBeg,
-      lineEnd,
-      deletedLineCount,
-      beforeLines,
-      afterLines: rawMemory.nLines,
-      nChars: rawMemory.nChars
-    }
+    data: responseData
   };
 }

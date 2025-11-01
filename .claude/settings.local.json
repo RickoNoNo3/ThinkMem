@@ -8,7 +8,21 @@
       "Bash(npm test:*)",
       "Bash(npx tsc:*)",
       "Bash(tree:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(xxd:*)",
+      "Bash(npx thinkmem:*)",
+      "Bash(cp:*)",
+      "Bash(npm start -- --help)",
+      "Bash(timeout 10s node:*)",
+      "Bash(timeout:*)",
+      "mcp__ThinkMem__ThinkMemAIGuide",
+      "mcp__ThinkMem__searchMemory",
+      "mcp__ThinkMem__addListMemory",
+      "mcp__ThinkMem__writeRaw",
+      "mcp__ThinkMem__appendListElement",
+      "mcp__ThinkMem__searchListElements"
     ],
     "deny": [],
     "ask": []

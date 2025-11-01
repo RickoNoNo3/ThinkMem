@@ -103,7 +103,11 @@ export function deleteLines(text: string, startLine: number, endLine: number): s
  */
 export function replaceWithPattern(text: string, pattern: string, replacement: string): string {
   try {
-    const regex = new RegExp(pattern, 'g');
+    // 特判全文匹配情况
+    if (pattern === '.*') {
+      return replacement;
+    }
+    const regex = new RegExp(pattern, 'gi');
     return text.replace(regex, replacement);
   } catch (error) {
     return text;

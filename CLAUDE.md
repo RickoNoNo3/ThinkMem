@@ -17,7 +17,7 @@ The system provides three types of memory storage for LLMs:
 
 ### Key Components
 - **MCP Server** (`src/server/ThinkMemServer.ts`): Handles stdio protocol communication
-- **HTTP SSE Server** (`src/server/HttpServer.ts`): Web API with real-time events
+- **StreamableHTTP Server** (`src/server/HttpServer.ts`): Web API with real-time events
 - **Memory Management** (`src/memory/`): Core memory implementations
 - **Storage Layer** (`src/storage/`): JSON file persistence with proper locking
 - **Utilities** (`src/utils/`): Text processing and error handling
@@ -64,7 +64,7 @@ npm test -- --coverage
 
 ### Dual Operation Modes
 - **Stdio Mode**: MCP protocol over stdin/stdout for AI assistant integration
-- **HTTP Mode**: REST API with SSE/WebSocket for web applications and multi-client support
+- **HTTP Mode**: StreamableHTTP for web applications and multi-client support
 
 ### Memory Storage Architecture
 - Single JSON file persistence with configurable location
@@ -107,5 +107,4 @@ npm test -- --coverage
 - Error handling with custom error types in `src/utils/errors.ts`
 - TypeScript strict mode enabled with comprehensive type definitions
 - Express.js with CORS support for HTTP mode
-- Socket.IO for WebSocket connections in HTTP mode
 - Jest configuration includes module name mapping for MCP SDK
