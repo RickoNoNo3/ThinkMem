@@ -38,7 +38,9 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(npm version:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(git push:*)",
+      "Bash(npm publish)"
     ],
     "deny": [],
     "ask": []

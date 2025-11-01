@@ -26,7 +26,8 @@
     "dist/**/*",
     "README.md",
     "CLAUDE.md",
-    "creed.md"
+    "creed.md",
+    "LLM_PROMPT_TEMPLATE.md"
   ],
   "author": "RickoNoNo3",
   "license": "MIT",
