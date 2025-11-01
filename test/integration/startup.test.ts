@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
+import { VERSION } from '../../src/version';
 
 const testDir = path.dirname(__filename);
 
@@ -76,7 +77,7 @@ describe('Server Startup Integration Tests', () => {
           },
           clientInfo: {
             name: 'test-client',
-            version: '1.0.0'
+            version: VERSION
           }
         }
       };

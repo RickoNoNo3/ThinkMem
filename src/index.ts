@@ -8,6 +8,7 @@ import { ThinkMemServer } from './server/ThinkMemServer';
 // import { StreamableHTTPServer } from './server/HttpServer';
 import { ConfigError } from './utils/errors';
 import { startHTTPServer } from './server/HttpServer';
+import { VERSION } from './version';
 
 
 const program = new Command();
@@ -15,7 +16,7 @@ const program = new Command();
 program
   .name('thinkmem')
   .description('THINK-MEM: AI Memory Management System for LLMs')
-  .version('1.0.0');
+  .version(VERSION);
 
 program
   .option('-m, --mode <mode>', 'Operation mode (stdio|http)', 'stdio')

@@ -22,8 +22,8 @@ export function startHTTPServer(thinkMemServer: ThinkMemServer, port: number) {
       await transport.handleRequest(req, res, req.body);
   });
 
-  app.listen(port, () => {
-      console.log(`ThinkMem MCP Server running on http://localhost:${port}/mcp`);
+  app.listen(port, '0.0.0.0', () => {
+      console.log(`ThinkMem MCP Server running on http://0.0.0.0:${port}/mcp`);
   }).on('error', error => {
       console.error('Server error:', error);
       process.exit(1);

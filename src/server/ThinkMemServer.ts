@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import * as fs from 'fs';
 import { z } from 'zod';
+import { VERSION } from '../version';
 
 import { JsonStorage } from '../storage/JsonStorage';
 import { RawMemory } from '../memory/RawMemory';
@@ -33,7 +34,7 @@ export class ThinkMemServer {
     this.server = new McpServer(
       {
         name: 'thinkmem',
-        version: '1.0.0',
+        version: VERSION,
       },
       {
         capabilities: {

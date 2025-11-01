@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Memory, RawMemory, ListMemory } from '../types';
 import { RawMemory as RawMemoryClass } from '../memory/RawMemory';
+import { VERSION } from '../version';
 
 export interface DatabaseSchema {
   memories: Map<string, Memory>;
@@ -24,7 +25,7 @@ export class JsonStorage {
     this.data = {
       memories: new Map(),
       secrets: new Map(),
-      version: '1.0.0',
+      version: VERSION,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -77,7 +78,7 @@ export class JsonStorage {
         this.data = {
           memories,
           secrets,
-          version: jsonData.version || '1.0.0',
+          version: jsonData.version || VERSION,
           createdAt: jsonData.createdAt || new Date().toISOString(),
           updatedAt: jsonData.updatedAt || new Date().toISOString()
         };
@@ -90,7 +91,7 @@ export class JsonStorage {
       this.data = {
         memories: new Map(),
         secrets: new Map(),
-        version: '1.0.0',
+        version: VERSION,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
