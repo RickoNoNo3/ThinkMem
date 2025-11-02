@@ -57,6 +57,9 @@ export const NamePathHelper = {
                         default:
                             index = parseInt(`${parsed.flags[0]}`);
                     }
+                    if (index < 0 || index >= (parent as ListMemory).length) {
+                        throw new InvalidOperationError('parseNamePath', `Index ${index} out of bounds for list of length ${(parent as ListMemory).length}. Use append/insert/push operations instead.`);
+                    }
                 } else {
                     // Use exact name matching only
                     const memory = (parent as ListMemory).getByName(parsed.names[1]);
