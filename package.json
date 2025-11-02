@@ -1,6 +1,6 @@
 {
   "name": "thinkmem",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "publisher": "RickoNoNo3",
   "description": "ThinkMem: AI Memory Management MCP System for LLMs",
   "main": "dist/index.js",
