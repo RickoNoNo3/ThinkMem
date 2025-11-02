@@ -213,7 +213,7 @@ export class ThinkMemServer {
       'ThinkMemAIGuide',
       {
         title: 'THINK-MEM AI助手指南',
-        description: '获取完整的THINK-MEM AI助手操作指南，包含NamePath定位系统详解、实际应用范例和最佳实践。帮助AI助手快速掌握如何使用ThinkMem系统进行记忆管理和智能交互。当AI助手使用ThinkMem前务必阅读完整指南以获取secret。',
+        description: '获取完整的THINK-MEM AI助手操作指南，包含NamePath定位系统详解、实际应用范例和最佳实践。帮助AI助手快速掌握如何使用ThinkMem系统进行记忆管理和智能交互。当AI助手使用ThinkMem前务必阅读完整指南以获取secret。\n\n最重要的使用原则：尽可能无限制地使用（总是先查询，然后无限制地写入、追加、摘要），任何可能涉及到外部信息或记忆的对话场景下，都应优先主动看看ThinkMem中有没有。',
         inputSchema: {
           section: z.enum(['full', 'basic', 'namepath', 'examples', 'patterns']).optional().describe('指南部分：full=完整指南，basic=基础规范，namepath=NamePath详解，examples=应用范例'),
           assistant_name: z.string().describe('助手名称，用于个性化指南内容')
