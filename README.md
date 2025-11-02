@@ -53,6 +53,7 @@ JSON：
 
 一、启动服务器：
 ```bash
+npm -g install thinkmem
 npx -g thinkmem --mode http --port 13809 # --db 可有可无
 ```
 
