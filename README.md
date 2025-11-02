@@ -4,6 +4,7 @@ AI Memory Management System for LLMs - 让LLM善用思考，善用记忆
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescript-lang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green?logo=node.js)](https://nodejs.org/)
+[![Node.js CI](https://github.com/RickoNoNo3/ThinkMem/actions/workflows/node.js.yml/badge.svg)](https://github.com/RickoNoNo3/ThinkMem/actions/workflows/node.js.yml)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## 📋 项目简介
@@ -206,7 +207,6 @@ npm test -- --testNamePattern="RawMemory"
 
 - [Model Context Protocol](https://modelcontextprotocol.io/) - 提供AI助手通信协议
 - [TypeScript](https://www.typescriptlang.org/) - 类型安全的JavaScript
-- [Socket.IO](https://socket.io/) - 实时通信库
 
 ## 📞 支持
 
