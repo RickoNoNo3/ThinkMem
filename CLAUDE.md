@@ -43,6 +43,9 @@ npm start -- --mode http --port 8080
 
 # Code linting
 npm run lint
+
+# Version synchronization (auto-runs after npm version)
+npm run postversion
 ```
 
 ### Testing
@@ -58,6 +61,9 @@ npm test -- --watch
 
 # Generate coverage report
 npm test -- --coverage
+
+# Run tests with CI-like clean install
+npm ci && npm test
 ```
 
 ## Key Design Patterns
@@ -95,11 +101,23 @@ npm test -- --coverage
 ## File Structure Notes
 
 - **Entry point**: `src/index.ts` - CLI interface with commander.js
-- **Type definitions**: `src/types/` - Core TypeScript interfaces
-- **Memory implementations**: `src/memory/` - RawMemory, ListMemory classes
-- **Storage abstraction**: `src/storage/` - JSON persistence layer
-- **Server implementations**: `src/server/` - MCP and HTTP servers
-- **Tests**: `test/` - Jest-based test suite with ts-jest
+- **Version management**: `src/version.ts` - Centralized version (auto-synced from package.json)
+- **Type definitions**: `src/types/index.ts` - Core TypeScript interfaces
+- **Memory implementations**:
+  - `src/memory/RawMemory.ts` - Unstructured text storage with line-level operations
+  - `src/memory/ListMemory.ts` - Ordered collections with array/deque/stack roles
+- **Storage abstraction**:
+  - `src/storage/JsonStorage.ts` - JSON file persistence with locking
+  - `src/storage/NamePathHelper.ts` - Memory name path resolution
+- **Server implementations**:
+  - `src/server/ThinkMemServer.ts` - MCP stdio protocol server
+  - `src/server/HttpServer.ts` - StreamableHTTP web server
+- **Utilities**:
+  - `src/utils/textUtils.ts` - Text processing utilities
+  - `src/utils/errors.ts` - Custom error types
+  - `src/utils/logger.ts` - Logging utilities
+- **Tests**: `test/` - Jest-based test suite with ts-jest and MCP SDK module mapping
+- **Scripts**: `scripts/sync-version.js` - Auto-syncs version from package.json to src/version.ts
 
 ## Important Implementation Details
 
@@ -108,3 +126,7 @@ npm test -- --coverage
 - TypeScript strict mode enabled with comprehensive type definitions
 - Express.js with CORS support for HTTP mode
 - Jest configuration includes module name mapping for MCP SDK
+- Node.js CI/CD pipeline tests on Node.js 20.x and 22.x
+- Version management automated through npm scripts (postversion hook)
+- Global uncaught exception handling for robust error management
+- File-based locking with configurable database location (default: `~/.thinkmem/current.db`)
