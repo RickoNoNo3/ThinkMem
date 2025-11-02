@@ -373,7 +373,7 @@ describe('RawMemory Unit Tests', () => {
       expect(result.data).toBe('summarized'); // Should be placeholded since fully covered
       expect(result.summaries).toHaveLength(1);
       expect(result.summaries[0].text).toBe('Complete summary of all content');
-      expect(result.happyToSum).toBe(false);
+      expect(result.happyToSum).toBe('NONEED');
     });
 
     test('should read with partial summary coverage', () => {
@@ -383,7 +383,7 @@ describe('RawMemory Unit Tests', () => {
 
       expect(result.data).toBe('Line 1: First content\nLine 2: Second content\nLine 3: Third content');
       expect(result.summaries).toHaveLength(1);
-      expect(result.happyToSum).toBe(false); // 3 lines total, 1 covered
+      expect(result.happyToSum).toBe('NONEED'); // 3 lines total, 1 covered
     });
 
     test('should suggest summary addition for long ranges', () => {
@@ -395,12 +395,12 @@ describe('RawMemory Unit Tests', () => {
       }
 
       const result = longMemory.read(0, 249);
-      expect(result.happyToSum).toBe(true); // should suggest summary
+      expect(result.happyToSum).toContain('MUST'); // should suggest summary
     });
 
     test('should not suggest summary for short ranges', () => {
       const result = rawMemory.read(0, 1);
-      expect(result.happyToSum).toBe(false); // Only 2 lines
+      expect(result.happyToSum).toBe('NONEED'); // Only 2 lines
     });
 
     test('should handle read with empty memory', () => {
@@ -410,7 +410,7 @@ describe('RawMemory Unit Tests', () => {
 
       expect(result.data).toBe('');
       expect(result.summaries).toHaveLength(0);
-      expect(result.happyToSum).toBe(false);
+      expect(result.happyToSum).toBe('NONEED');
     });
   });
 

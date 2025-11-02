@@ -73,7 +73,7 @@ export async function readRawLinesHandler(
     const data = rawMemory.readData(actualLineBeg, actualLineEnd);
     response = {
       data: data,
-      happyToSum: false
+      happyToSum: 'NONEED'
     };
   }
 

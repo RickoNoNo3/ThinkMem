@@ -354,7 +354,7 @@ interface ReadRawLinesRequest {
 interface ReadRawLinesResponse {
   data?: string;
   summaries?: MemorySummary[];
-  happyToSum?: boolean;
+  happyToSum?: string;
 }
 ```
 
@@ -859,7 +859,7 @@ CMD ["node", "dist/index.js", "--mode", "http"]
 {
   "data": "这是第3行，这一行描写了林黛玉的样貌.",
   "summaries": [],
-  "happyToSum": false,
+  "happyToSum": 'NONEED',
 }
 
 

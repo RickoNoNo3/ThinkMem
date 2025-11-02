@@ -167,7 +167,7 @@ export interface ReadRawLinesRequest {
 export interface ReadRawLinesResponse {
   data?: string;
   summaries?: MemorySummary[];
-  happyToSum?: boolean;
+  happyToSum?: string;
 }
 
 // RawMemory操作响应

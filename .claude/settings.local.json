@@ -46,7 +46,8 @@
       "Bash(npm cache clean:*)",
       "Bash(thinkmem --help:*)",
       "Bash(/mcp)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(git tag:*)"
     ],
     "deny": [],
     "ask": []

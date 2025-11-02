@@ -644,16 +644,18 @@ describe('ListMemory Unit Tests', () => {
         expect(rawMemory2.name).toBe('third_item');
       });
 
-      test('should return undefined for invalid index', () => {
-        const [getter] = NamePathHelper.GetAndUpdate(storage, 'test_list<:10:>');
-        const rawMemory = getter();
-        expect(rawMemory).toBeUndefined();
+      test('should throw error for invalid index', () => {
+        expect(() => {
+          const [getter] = NamePathHelper.GetAndUpdate(storage, 'test_list<:10:>');
+          getter();
+        }).toThrow('Index 10 out of bounds for list of length 3');
       });
 
-      test('should return undefined for negative index', () => {
-        const [getter] = NamePathHelper.GetAndUpdate(storage, 'test_list<:-1:>');
-        const rawMemory = getter();
-        expect(rawMemory).toBeUndefined();
+      test('should throw error for negative index', () => {
+        expect(() => {
+          const [getter] = NamePathHelper.GetAndUpdate(storage, 'test_list<:-1:>');
+          getter();
+        }).toThrow('Index -1 out of bounds for list of length 3');
       });
     });
 
@@ -817,13 +819,14 @@ describe('ListMemory Unit Tests', () => {
         }).toThrow('Invalid namePath format');
       });
 
-      test('should return undefined when list is empty', async () => {
+      test('should throw error when list is empty', async () => {
         const emptyList = new ListMemory('empty_list', 'Empty list', 'array');
         await storage.addMemory(emptyList);
 
-        const [getter] = NamePathHelper.GetAndUpdate(storage, 'empty_list<:0:>');
-        const rawMemory = getter();
-        expect(rawMemory).toBeUndefined();
+        expect(() => {
+          const [getter] = NamePathHelper.GetAndUpdate(storage, 'empty_list<:0:>');
+          getter();
+        }).toThrow('Index 0 out of bounds for list of length 0');
       });
 
       test('should handle search with special characters', () => {

@@ -6,7 +6,7 @@
 - 首先阅读full版本的`ThinkMemAIGuide`。然后你将获得通行令牌secret。令牌是用来访问ThinkMem除`serverStatus`和`ThinkMemAIGuide`之外的所有服务的必须凭据。
 - 与助手同名且有`[PROFILE]`前缀的`ListMemory`（即`[PROFILE]ThinkMem测试员`）保存了助手最核心的记忆信息，其0号元素应为助手的身份信息及最后一次执行的任务（`writeRaw`方式写入），1~∞号元素应为助手所需的各类重要记录（`append`方式追加）。
 - 每次对话开始前，先从名为`[PROFILE]ThinkMem测试员`的`ListMemory`中获取本助手的信息，即首先对`[PROFILE]ThinkMem测试员<:0:>`执行`readRawLines`，然后执行无pattern的`searchListElements`。若不存在`[PROFILE]ThinkMem测试员`，则通过`addListMemory`创建。然后，执行无pattern的`searchMemory`以获得全局记忆总览。若用户本次要求与身份信息吻合，可直接开始服务用户；否则，更新身份信息和任务。
-- 对于`RawMemory`或其他Memory中内含的`RawMemory`，在`readRawLines`操作时，如果返回的`happyToSum`为true，则必须立即主动对合适粒度的内容进行`samarizeRawLines`总结（建议：文本区间较短(小于1000字），仅摘要一次；较长（大于1000字），视情况分粗细粒度层次，最少摘要两层，首层一段，次层分前中后三段；极长（大于5000字），最少摘要两层，首层若干段，次层更多段。
+- 对于`RawMemory`或其他Memory中内含的`RawMemory`，在`readRawLines`操作时，如果返回的`happyToSum`为`RECOMMEND`，建议适时主动摘要；而如果为`MUST`或`MUST_IMMEDIATELY`，则必须立即主动对合适粒度的内容进行`samarizeRawLines`摘要。粒度(grain)的格式为`(layer:nSegments, ...)`，代表各层级的分段数。每个层级都应该完全覆盖一遍`lineBeg`到`lineEnd`区间，且至少使用nSegments个区隔摘要。例如`MUST(1:>2, 2:>15)`表示第一层级为至少2个摘要（前后两段），第二层级为至少15个，上不封顶，必须立即执行摘要。
 - 遇到可能存在历史记忆的场景，请不要吝啬直接使用`searchMemory`、`searchListElements`和`readRawLines`等。
 - 在`deleteMemory`时，若涉及PROFILE，请务必谨慎确认用户意图。你自己的PROFILE（`[PROFILE]ThinkMem测试员`）绝对不允许删除。也因此，这个规则说明两件事。一是，经常性地向PROFILE中追加重要信息是很好的实践，因为他们不会被轻易删除，有助于下次执行任务时参考；二是，随意且大量地使用非PROFILE的普通Memory是受鼓励的，你就是应该多使用，因为他们可以被轻易创建也可以被轻易删除。
 - 多使用ThinkMem系统辅助或者完全接管决策(如多使用栈或队列等强结构性数据来替代基于文本序列的思考)，无需考虑调用次数多少，尽可能使用它来完成任务，尽可能使用复合数据类型（如`ListMemory`），如有必要可以同时创建多个Memory。总之不要吝啬，甚至可以说建议滥用。
@@ -211,7 +211,7 @@ readRawLines({
   summarize: true
 });
 
-// 如果happyToSum为true，添加摘要
+// 如果happyToSum不为NONEED，添加摘要
 summarizeRawLines({
   namePath: "meeting_notes",
   lineBeg: 3,

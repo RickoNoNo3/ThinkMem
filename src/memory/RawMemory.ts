@@ -199,7 +199,7 @@ export class RawMemory implements IRawMemory {
   read(lineBeg: number, lineEnd: number): {
     data: string;
     summaries: MemorySummary[];
-    happyToSum: boolean;
+    happyToSum: string;
   } {
     // 获取范围内的摘要
     const relevantSummaries = this.summaries.filter(summary =>
@@ -228,7 +228,33 @@ export class RawMemory implements IRawMemory {
     }
 
     // 判断是否推荐添加摘要
-    const happyToSum = !fullyCovered && ((lineEnd - lineBeg + 1) >= 20 || countChars(data) >= 300);
+    let happyToSum = 'NONEED';
+    if (!fullyCovered) {
+      // 基于总行数和每行平均字数判断推荐摘要的紧急程度
+      const totalLines = lineEnd - lineBeg + 1;
+      const totalChars = this.readData(lineBeg, lineEnd).length;
+      const meanCharsPerLine = totalLines > 0 ? totalChars / totalLines : 0;
+      const charScore = Math.max(0.01, Math.min(1, meanCharsPerLine / (200)));
+      const lineScore = Math.sqrt(Math.min(2000, totalLines) / 2000);
+      const weightedScore = (0.5 + 0.5 * charScore) * lineScore;
+      if (weightedScore > 0.5 || totalChars > 10000) {
+        happyToSum = 'MUST_IMMEDIATELY';
+      } else if (weightedScore > 0.3 || totalChars > 5000) {
+        happyToSum = 'MUST';
+      } else if (weightedScore > 0.1) {
+        happyToSum = 'RECOMMEND';
+      }
+      if (happyToSum !== 'NONEED') {
+        // 给出摘要粒度建议
+        const nLayers = Math.max(1, Math.min(5, Math.ceil(Math.log10(totalLines / 100 + 1))));
+        const layers = [];
+        for (let i = 1; i <= nLayers; i++) {
+          layers.push(Math.max(1, Math.ceil(Math.pow(2, i * 2) * charScore)));
+        }
+        const layersStr = layers.map((n, i) => `${i+1}:>${n}`).join(', ');
+        happyToSum += `(${layersStr})`;
+      }
+    }
 
     return {
       data,
