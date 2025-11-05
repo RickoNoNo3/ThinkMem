@@ -78,7 +78,7 @@ claude mcp add --transport http ThinkMem --scope user http://your.server:13809/m
 
 ## 📖 详细文档
 
-- 🏗️ [顶层设计文档](./creed.md) - 系统架构和设计理念
+- 🏗️ [顶层设计文档](./Creed.md) - 系统架构和设计理念
 - 🤖 [Claude助手指南](./CLAUDE.md) - Claude Code集成说明
 
 ---
