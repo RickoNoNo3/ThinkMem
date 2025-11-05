@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/rickonono3-thinkmem-badge.png)](https://mseep.ai/app/rickonono3-thinkmem)
+
 # 🧠 THINK-MEM
 
 AI Memory Management System for LLMs - 让LLM善用思考，善用记忆
